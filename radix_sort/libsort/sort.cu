@@ -250,18 +250,20 @@ void radix_sort(unsigned int* const d_out,
     if (d_in_len % max_elems_per_block != 0)
         grid_sz += 1;
 
+    // The per-block, per-bit prefix sums (where this value goes in the per-block 2bit group)
     unsigned int* d_prefix_sums;
     unsigned int d_prefix_sums_len = d_in_len;
     checkCudaErrors(cudaMalloc(&d_prefix_sums, sizeof(unsigned int) * d_prefix_sums_len));
     checkCudaErrors(cudaMemset(d_prefix_sums, 0, sizeof(unsigned int) * d_prefix_sums_len));
 
-    //s_scan_mask_out_sums has the per-block starting index of each 2bit. It is stored in d_block_sums.
-    //per-block starting index (count) of each 2bit grouped by 2bit (d_block_sums[0-nblock] are all the 0 2bits)
+    // per-block starting index (count) of each 2bit grouped by 2bit (d_block_sums[0-nblock] are all the 0 2bits)
     unsigned int* d_block_sums;
     unsigned int d_block_sums_len = 4 * grid_sz; // 4-way split
     checkCudaErrors(cudaMalloc(&d_block_sums, sizeof(unsigned int) * d_block_sums_len));
     checkCudaErrors(cudaMemset(d_block_sums, 0, sizeof(unsigned int) * d_block_sums_len));
 
+    // prefix-sum of d_block_sums, e.g. the starting position for each block's 2bit group
+    // (d_scan_block_sums[1] is where block 1's 2bit group 0 should start)
     unsigned int* d_scan_block_sums;
     checkCudaErrors(cudaMalloc(&d_scan_block_sums, sizeof(unsigned int) * d_block_sums_len));
     checkCudaErrors(cudaMemset(d_scan_block_sums, 0, sizeof(unsigned int) * d_block_sums_len));
@@ -293,15 +295,15 @@ void radix_sort(unsigned int* const d_out,
                                                                 d_in_len, 
                                                                 max_elems_per_block);
 
-        if(shift_width == 2) {
-            printf("d_block_sums:\n");
-            size_t sz = d_block_sums_len;
-            unsigned int* h_test = new unsigned int[sz];
-            checkCudaErrors(cudaMemcpy(h_test, d_block_sums, sizeof(unsigned int) * sz, cudaMemcpyDeviceToHost));
-            for(unsigned int i = 0; i < sz; i++) {
-                printf("%u:\t%u\n", i, h_test[i]);
-            }
-        }
+        /* if(shift_width == 2) { */
+        /*     printf("d_block_sums:\n"); */
+        /*     size_t sz = d_block_sums_len; */
+        /*     unsigned int* h_test = new unsigned int[sz]; */
+        /*     checkCudaErrors(cudaMemcpy(h_test, d_block_sums, sizeof(unsigned int) * sz, cudaMemcpyDeviceToHost)); */
+        /*     for(unsigned int i = 0; i < sz; i++) { */
+        /*         printf("%u:\t%u\n", i, h_test[i]); */
+        /*     } */
+        /* } */
         //unsigned int* h_test = new unsigned int[d_in_len];
         //checkCudaErrors(cudaMemcpy(h_test, d_in, sizeof(unsigned int) * d_in_len, cudaMemcpyDeviceToHost));
         //for (unsigned int i = 0; i < d_in_len; ++i)
@@ -312,15 +314,15 @@ void radix_sort(unsigned int* const d_out,
         // scan global block sum array
         sum_scan_blelloch(d_scan_block_sums, d_block_sums, d_block_sums_len);
 
-        if(shift_width == 2) {
-            printf("d_scan_block_sums:\n");
-            size_t sz = d_block_sums_len;
-            unsigned int* h_test = new unsigned int[sz];
-            checkCudaErrors(cudaMemcpy(h_test, d_scan_block_sums, sizeof(unsigned int) * sz, cudaMemcpyDeviceToHost));
-            for(unsigned int i = 0; i < sz; i++) {
-                printf("%u:\t%u\n", i, h_test[i]);
-            }
-        }
+        /* if(shift_width == 2) { */
+        /*     printf("d_scan_block_sums:\n"); */
+        /*     size_t sz = d_block_sums_len; */
+        /*     unsigned int* h_test = new unsigned int[sz]; */
+        /*     checkCudaErrors(cudaMemcpy(h_test, d_scan_block_sums, sizeof(unsigned int) * sz, cudaMemcpyDeviceToHost)); */
+        /*     for(unsigned int i = 0; i < sz; i++) { */
+        /*         printf("%u:\t%u\n", i, h_test[i]); */
+        /*     } */
+        /* } */
         // scatter/shuffle block-wise sorted array to final positions
         gpu_glbl_shuffle<<<grid_sz, block_sz>>>(d_in, 
                                                     d_out, 
@@ -330,12 +332,12 @@ void radix_sort(unsigned int* const d_out,
                                                     d_in_len, 
                                                     max_elems_per_block);
 
-        if(shift_width == 2) {
-            printf("Checking LSBs: [0, %d]\n", shift_width + 1);
-            if(!check(d_in, d_prefix_sums, d_in_len, shift_width)) {
-                std::cout << "Failure\n";
-                break;
-            }
+        /* if(shift_width == 2) { */
+        /*     printf("Checking LSBs: [0, %d]\n", shift_width + 1); */
+        /*     if(!check(d_in, d_prefix_sums, d_in_len, shift_width)) { */
+        /*         std::cout << "Failure\n"; */
+        /*         break; */
+        /*     } */
 //            printf("Test Out:\n");
 //            size_t sz = d_block_sums_len;
 //            unsigned int* h_test = new unsigned int[sz];
@@ -343,7 +345,7 @@ void radix_sort(unsigned int* const d_out,
 //            for(unsigned int i = 0; i < sz; i++) {
 //                printf("%u:\t%u\n", i, h_test[i]);
 //            }
-        }
+        /* } */
     }
 
     checkCudaErrors(cudaMemcpy(d_out, d_in, sizeof(unsigned int) * d_in_len, cudaMemcpyDeviceToDevice));

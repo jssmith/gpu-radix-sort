@@ -6,8 +6,8 @@
 #include <iostream>
 #include <ctime>
 
-#include "sort.h"
-#include "utils.h"
+#include "../libsort/sort.h"
+#include "../libsort/utils.h"
 
 void cpu_sort(unsigned int* h_out, unsigned int* h_in, size_t len)
 {
