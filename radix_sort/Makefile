@@ -1,6 +1,7 @@
-CUDA_PATH ?= "/usr/local/cuda-7.5"
-NVCC := $(CUDA_PATH)/bin/nvcc
-NVCC_OPTS=-O3 -arch=sm_37 -Xcompiler -Wall -Xcompiler -Wextra -m64
+# CUDA_PATH ?= "/usr/local/cuda-7.5"
+# NVCC := $(CUDA_PATH)/bin/nvcc
+NVCC := nvcc
+NVCC_OPTS=-O3 -arch=compute_35 -Xcompiler -Wall -Xcompiler -Wextra -m64
 
 radix_sort: main.cu scan.o sort.o Makefile
 	$(NVCC) -o radix_sort main.cu sort.o scan.o $(NVCC_OPTS)

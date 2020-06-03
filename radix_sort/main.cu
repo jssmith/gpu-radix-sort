@@ -11,7 +11,7 @@
 
 void cpu_sort(unsigned int* h_out, unsigned int* h_in, size_t len)
 {
-    for (int i = 0; i < len; ++i)
+    for (size_t i = 0; i < len; ++i)
     {
         h_out[i] = h_in[i];
     }
@@ -50,7 +50,7 @@ void test_cpu_vs_gpu(unsigned int* h_in, unsigned int num_elems)
     // Check for any mismatches between outputs of CPU and GPU
     bool match = true;
     int index_diff = 0;
-    for (int i = 0; i < num_elems; ++i)
+    for (unsigned int i = 0; i < num_elems; ++i)
     {
         if (h_out_cpu[i] != h_out_gpu[i])
         {
@@ -88,40 +88,62 @@ void test_cpu_vs_gpu(unsigned int* h_in, unsigned int num_elems)
     delete[] h_out_cpu;
 }
 
+void oneGpu()
+{
+    unsigned int num_elems = 1024;
+    unsigned int* h_in = new unsigned int[num_elems];
+    unsigned int* h_out = new unsigned int[num_elems];
+    for (unsigned int j = 0; j < num_elems; j++)
+    {
+        h_in[j] = rand() % num_elems;
+    }
+
+    unsigned int* d_in;
+    unsigned int* d_out;
+    checkCudaErrors(cudaMalloc(&d_in, sizeof(unsigned int) * num_elems));
+    checkCudaErrors(cudaMalloc(&d_out, sizeof(unsigned int) * num_elems));
+    checkCudaErrors(cudaMemcpy(d_in, h_in, sizeof(unsigned int) * num_elems, cudaMemcpyHostToDevice));
+    radix_sort(d_out, d_in, num_elems);
+    checkCudaErrors(cudaMemcpy(h_out, d_out, sizeof(unsigned int) * num_elems, cudaMemcpyDeviceToHost));
+    checkCudaErrors(cudaFree(d_out));
+    checkCudaErrors(cudaFree(d_in));
+}
+
 int main()
 {
     // Set up clock for timing comparisons
     srand(1);
-
-    for (int i = 27; i < 28; ++i)
-    {
-        unsigned int num_elems = (1 << i);
-        //unsigned int num_elems = 8;
-        std::cout << "h_in size: " << num_elems << std::endl;
-
-        unsigned int* h_in = new unsigned int[num_elems];
-        unsigned int* h_in_rand = new unsigned int[num_elems];
-
-        for (int j = 0; j < num_elems; j++)
-        {
-            h_in[j] = (num_elems - 1) - j;
-            h_in_rand[j] = rand() % num_elems;
-            //std::cout << h_in[j] << " ";
-        }
-        //std::cout << std::endl;
-
-        std::cout << "*** i: " << i << " ***" << std::endl;
-        for (int j = 0; j < 5; ++j) {
-            std::cout << "*****Descending order*****" << std::endl;
-            test_cpu_vs_gpu(h_in, num_elems);
-            std::cout << "*****Random order*****" << std::endl;
-            test_cpu_vs_gpu(h_in_rand, num_elems);
-            std::cout << std::endl;
-        }
-
-        delete[] h_in;
-        delete[] h_in_rand;
-
-        std::cout << std::endl;
-    }
+    oneGpu();
+    std::cout << "Done\n";
+//    for (int i = 27; i < 28; ++i)
+//    {
+//        unsigned int num_elems = (1 << i);
+//        //unsigned int num_elems = 8;
+//        std::cout << "h_in size: " << num_elems << std::endl;
+//
+//        unsigned int* h_in = new unsigned int[num_elems];
+//        unsigned int* h_in_rand = new unsigned int[num_elems];
+//
+//        for (int j = 0; j < num_elems; j++)
+//        {
+//            h_in[j] = (num_elems - 1) - j;
+//            h_in_rand[j] = rand() % num_elems;
+//            //std::cout << h_in[j] << " ";
+//        }
+//        //std::cout << std::endl;
+//
+//        std::cout << "*** i: " << i << " ***" << std::endl;
+//        for (int j = 0; j < 5; ++j) {
+//            std::cout << "*****Descending order*****" << std::endl;
+//            test_cpu_vs_gpu(h_in, num_elems);
+//            std::cout << "*****Random order*****" << std::endl;
+//            test_cpu_vs_gpu(h_in_rand, num_elems);
+//            std::cout << std::endl;
+//        }
+//
+//        delete[] h_in;
+//        delete[] h_in_rand;
+//
+//        std::cout << std::endl;
+//    }
 }
