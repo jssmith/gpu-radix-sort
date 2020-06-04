@@ -3,14 +3,11 @@
 NVCC := nvcc
 NVCC_OPTS=-O3 -arch=compute_35 -Xcompiler -Wall -Xcompiler -Wextra -Xcompiler -fPIC -m64
 
-libsort.so: sort.o scan.o
+libsort.so: sort.o scan.o invokers.o
 	nvcc --shared -Xcompiler -fPIC -shared $^ -o $@
 
-sort.o: sort.cu
-	$(NVCC) -c sort.cu $(NVCC_OPTS)
-
-scan.o: scan.cu
-	$(NVCC) -c scan.cu $(NVCC_OPTS)
+%.o: %.cu
+	$(NVCC) -c $< $(NVCC_OPTS)
 
 clean:
 	rm -f *.o *.so 
