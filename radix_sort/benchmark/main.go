@@ -103,6 +103,19 @@ func reportStats(mgr *srkmgr.SrkManager) {
 	fmt.Printf("\n\n")
 }
 
+func checkRes(res []uint32) error {
+	if len(res) != len(goldenOutput) {
+		return fmt.Errorf("Lengths do not match: Expected %v, Got %v\n", len(goldenOutput), len(res))
+	}
+
+	for i := 0; i < len(res); i++ {
+		if res[i] != goldenOutput[i] {
+			return fmt.Errorf("Response doesn't match reference at %v\n: Expected %v, Got %v\n", i, goldenOutput[i], res[i])
+		}
+	}
+	return nil
+}
+
 func main() {
 	retcode := 0
 	defer func() { os.Exit(retcode) }()
@@ -119,8 +132,14 @@ func main() {
 		retcode = 1
 		return
 	}
-	fmt.Printf("Number of returned ints: %v\n", len(ints))
-	fmt.Printf("Int values: %v\n", ints)
+
+	err = checkRes(ints)
+	if err != nil {
+		fmt.Printf("Failure: %v\n", err)
+		retcode = 1
+		return
+	}
+
 	fmt.Println("Success!")
 	return
 }
