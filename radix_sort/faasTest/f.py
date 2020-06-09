@@ -56,15 +56,15 @@ def f(event):
     res = sortLib.providedGpu(cInt, ctypes.c_size_t(nElem))
 
     if res:
-        return json.dumps({
+        return {
                 "success" : True,
                 "result" : base64.b64encode(cRaw).decode('utf-8')
-            })
+               }
     else:
-        return json.dumps({
+        return {
                 "success" : False,
                 "result" : ""
-            })
+               }
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
@@ -73,10 +73,10 @@ if __name__ == "__main__":
     else:
         arg = { 
                 "requestType" : "generate",
-                "test-size" : 1024*32,
+                "test-size" : 1024*4,
               }
 
-    resp = json.loads(f(arg))
+    resp = f(arg)
     if not resp['success']:
         print("Invocation failed")
     else:
