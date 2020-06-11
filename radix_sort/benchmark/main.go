@@ -6,7 +6,9 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
+	"sort"
 
 	"github.com/serverlessresearch/srk/pkg/srkmgr"
 	"github.com/sirupsen/logrus"
@@ -37,10 +39,32 @@ func getMgr() *srkmgr.SrkManager {
 	return mgr
 }
 
+func b64ToIntSlice(encoded string) ([]uint32, error) {
+	// Convert the contents from base64 encoded to bytes[]
+	bytes, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to decode response: %v", err)
+	}
+
+	numElem := len(bytes) / 4
+	ints := make([]uint32, numElem)
+	for i := 0; i < numElem; i++ {
+		ints[i] = binary.LittleEndian.Uint32(bytes[(i * 4):(i*4 + 4)])
+	}
+
+	return ints, nil
+}
+
 // Invoke the vector add kernel once and synchronously wait for a response.
-// Returns: end-to-end invocation latency in us
-func invokeFaas(mgr *srkmgr.SrkManager) ([]uint32, error) {
-	rawResp, err := mgr.Provider.Faas.Invoke("radixsort", exampleFaasArg)
+// Returns the list of sorted integers
+func invokeFaas(mgr *srkmgr.SrkManager, arg *FaasArg) ([]uint32, error) {
+
+	jsonArg, err := json.Marshal(arg)
+	if err != nil {
+		return nil, err
+	}
+
+	rawResp, err := mgr.Provider.Faas.Invoke("radixsort", string(jsonArg))
 	if err != nil {
 		return nil, fmt.Errorf("Failed to invoke function: %v\n", err)
 	}
@@ -56,27 +80,7 @@ func invokeFaas(mgr *srkmgr.SrkManager) ([]uint32, error) {
 		return nil, fmt.Errorf("Remote Task Failed")
 	}
 
-	// Convert the contents from base64 encoded to bytes[]
-	respBytes, err := base64.StdEncoding.DecodeString(resp.Result)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to decode response: %v", err)
-	}
-	// respLen := base64.StdEncoding.DecodedLen(resp.Len() - 2)
-	// respBytes := make([]byte, respLen)
-	//
-	// _, err = base64.StdEncoding.DecodeStringll(respBytes, resp.Bytes()[1:resp.Len()-1])
-	// if err != nil {
-	// 	fmt.Println("decode error:", err)
-	// }
-
-	// Convert bytes to float
-	numElem := len(respBytes) / 4
-	respInts := make([]uint32, numElem)
-	for i := 0; i < numElem; i++ {
-		respInts[i] = binary.LittleEndian.Uint32(respBytes[(i * 4):(i*4 + 4)])
-	}
-
-	return respInts, nil
+	return b64ToIntSlice(resp.Result)
 }
 
 func printCSV(m map[string]float64) {
@@ -103,14 +107,26 @@ func reportStats(mgr *srkmgr.SrkManager) {
 	fmt.Printf("\n\n")
 }
 
-func checkRes(res []uint32) error {
-	if len(res) != len(goldenOutput) {
-		return fmt.Errorf("Lengths do not match: Expected %v, Got %v\n", len(goldenOutput), len(res))
+func generateInputs(len int) []uint32 {
+	rand.Seed(0)
+	out := make([]uint32, len)
+	for i := 0; i < len; i++ {
+		out[i] = rand.Uint32()
+	}
+	return out
+}
+
+func checkRes(orig []uint32, new []uint32) error {
+	if len(orig) != len(new) {
+		return fmt.Errorf("Lengths do not match: Expected %v, Got %v\n", len(orig), len(new))
 	}
 
-	for i := 0; i < len(res); i++ {
-		if res[i] != goldenOutput[i] {
-			return fmt.Errorf("Response doesn't match reference at %v\n: Expected %v, Got %v\n", i, goldenOutput[i], res[i])
+	origCpy := make([]uint32, len(orig))
+	copy(origCpy, orig)
+	sort.Slice(origCpy, func(i, j int) bool { return origCpy[i] < origCpy[j] })
+	for i := 0; i < len(orig); i++ {
+		if origCpy[i] != new[i] {
+			return fmt.Errorf("Response doesn't match reference at %v\n: Expected %v, Got %v\n", i, origCpy[i], new[i])
 		}
 	}
 	return nil
@@ -124,18 +140,24 @@ func main() {
 	mgr := getMgr()
 	defer mgr.Destroy()
 
-	fmt.Println("Invoking FaaS Sort")
-	// oneResp(invokeFaas, mgr)
-	ints, err := invokeFaas(mgr)
+	inputs := generateInputs(32)
+	fArg, err := NewFaasArg("provided", inputs)
+	if err != nil {
+		fmt.Printf("Failed to create FaaS Argument: %v", err)
+		retcode = 1
+		return
+	}
+
+	outputs, err := invokeFaas(mgr, fArg)
 	if err != nil {
 		fmt.Printf("Invocation failure: %v\n", err)
 		retcode = 1
 		return
 	}
 
-	err = checkRes(ints)
+	err = checkRes(inputs, outputs)
 	if err != nil {
-		fmt.Printf("Failure: %v\n", err)
+		fmt.Printf("Sorted Wrong: %v\n", err)
 		retcode = 1
 		return
 	}
