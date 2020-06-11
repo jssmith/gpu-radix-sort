@@ -239,146 +239,90 @@ bool check(unsigned int* d_in, unsigned int* d_prefix_sums, unsigned int len, in
 }
 
 // Allocate all intermediate state needed to perform a sort of d_in into d_out
-sort_state_t *create_state(unsigned int* const d_out,
-    unsigned int* const d_in,
-    unsigned int d_in_len)
+SortState::SortState(unsigned int* in, size_t len) : data_len(len)
 {
-    sort_state_t *state = (sort_state_t*)malloc(sizeof(sort_state_t));
-    state->d_out = d_out;
-    state->d_in = d_in;
-    state->data_len = d_in_len;
-
-    state->block_sz = MAX_BLOCK_SZ;
-    state->grid_sz = state->data_len / state->block_sz;
+    block_sz = MAX_BLOCK_SZ;
+    grid_sz = data_len / block_sz;
 
     // Take advantage of the fact that integer division drops the decimals
-    if (state->data_len % state->block_sz != 0)
-        state->grid_sz += 1;
+    if (data_len % block_sz != 0)
+        grid_sz += 1;
+
+    checkCudaErrors(cudaMalloc(&d_in, sizeof(unsigned int) * data_len));
+    checkCudaErrors(cudaMalloc(&d_out, sizeof(unsigned int) * data_len));
+    checkCudaErrors(cudaMemcpy(d_in, in, sizeof(unsigned int) * data_len, cudaMemcpyHostToDevice));
 
     // The per-block, per-bit prefix sums (where this value goes in the per-block 2bit group)
-    state->prefix_sums_len = state->data_len;
-    checkCudaErrors(cudaMalloc(&(state->d_prefix_sums), sizeof(unsigned int) * state->prefix_sums_len));
-    checkCudaErrors(cudaMemset(state->d_prefix_sums, 0, sizeof(unsigned int) * state->prefix_sums_len));
+    prefix_sums_len = data_len;
+    checkCudaErrors(cudaMalloc(&d_prefix_sums, sizeof(unsigned int) * prefix_sums_len));
+    checkCudaErrors(cudaMemset(d_prefix_sums, 0, sizeof(unsigned int) * prefix_sums_len));
 
     // per-block starting index (count) of each 2bit grouped by 2bit (d_block_sums[0-nblock] are all the 0 2bits)
     // e.g. 4 indices per block
-    state->block_sums_len = 4 * state->grid_sz;
-    checkCudaErrors(cudaMalloc(&(state->d_block_sums), sizeof(unsigned int) * state->block_sums_len));
-    checkCudaErrors(cudaMemset(state->d_block_sums, 0, sizeof(unsigned int) * state->block_sums_len));
+    block_sums_len = 4 * grid_sz;
+    checkCudaErrors(cudaMalloc(&(d_block_sums), sizeof(unsigned int) * block_sums_len));
+    checkCudaErrors(cudaMemset(d_block_sums, 0, sizeof(unsigned int) * block_sums_len));
 
     // prefix-sum of d_block_sums, e.g. the starting position for each block's 2bit group
     // (d_scan_block_sums[1] is where block 1's 2bit group 0 should start)
-    state->scan_block_sums_len = state->block_sums_len;
-    checkCudaErrors(cudaMalloc(&(state->d_scan_block_sums), sizeof(unsigned int) * state->block_sums_len));
-    checkCudaErrors(cudaMemset(state->d_scan_block_sums, 0, sizeof(unsigned int) * state->block_sums_len));
+    scan_block_sums_len = block_sums_len;
+    checkCudaErrors(cudaMalloc(&(d_scan_block_sums), sizeof(unsigned int) * block_sums_len));
+    checkCudaErrors(cudaMemset(d_scan_block_sums, 0, sizeof(unsigned int) * block_sums_len));
 
     // shared memory consists of 3 arrays the size of the block-wise input
     //  and 2 arrays the size of n in the current n-way split (4)
-    unsigned int s_data_len = state->block_sz;
-    unsigned int s_mask_out_len = state->block_sz + 1;
-    unsigned int s_merged_scan_mask_out_len = state->block_sz;
+    unsigned int s_data_len = block_sz;
+    unsigned int s_mask_out_len = block_sz + 1;
+    unsigned int s_merged_scan_mask_out_len = block_sz;
     unsigned int s_mask_out_sums_len = 4; // 4-way split
     unsigned int s_scan_mask_out_sums_len = 4;
-    state->shmem_sz = (s_data_len 
+    shmem_sz = (s_data_len 
                             + s_mask_out_len
                             + s_merged_scan_mask_out_len
                             + s_mask_out_sums_len
                             + s_scan_mask_out_sums_len)
                             * sizeof(unsigned int);
-
-    return state;
 }
 
 // Destroy's everything allocated by init_sort(). It is invalid to use state
 // after calling destroy_state(state). Noteably, this does not deallocate
 // state->d_in or d_out, you must free those independently.
-void destroy_state(sort_state_t *state)
+SortState::~SortState()
 {
-    checkCudaErrors(cudaFree(state->d_scan_block_sums));
-    checkCudaErrors(cudaFree(state->d_block_sums));
-    checkCudaErrors(cudaFree(state->d_prefix_sums));
-    free(state);
+    checkCudaErrors(cudaFree(d_in));
+    checkCudaErrors(cudaFree(d_out));
+    checkCudaErrors(cudaFree(d_scan_block_sums));
+    checkCudaErrors(cudaFree(d_block_sums));
+    checkCudaErrors(cudaFree(d_prefix_sums));
+
 }
 
-// An attempt at the gpu radix sort variant described in this paper:
-// https://vgc.poly.edu/~csilva/papers/cgf.pdf
-void radix_sort(unsigned int* const d_out,
-    unsigned int* const d_in,
-    unsigned int d_in_len)
-{
-    /* unsigned int block_sz = MAX_BLOCK_SZ; */
-    /* unsigned int max_elems_per_block = block_sz; */
-    /* unsigned int grid_sz = d_in_len / max_elems_per_block; */
-    /*  */
-    /* // Take advantage of the fact that integer division drops the decimals */
-    /* if (d_in_len % max_elems_per_block != 0) */
-    /*     grid_sz += 1; */
-    /*  */
-    /* // The per-block, per-bit prefix sums (where this value goes in the per-block 2bit group) */
-    /* unsigned int* d_prefix_sums; */
-    /* unsigned int d_prefix_sums_len = d_in_len; */
-    /* checkCudaErrors(cudaMalloc(&d_prefix_sums, sizeof(unsigned int) * d_prefix_sums_len)); */
-    /* checkCudaErrors(cudaMemset(d_prefix_sums, 0, sizeof(unsigned int) * d_prefix_sums_len)); */
-    /*  */
-    /* // per-block starting index (count) of each 2bit grouped by 2bit (d_block_sums[0-nblock] are all the 0 2bits) */
-    /* unsigned int* d_block_sums; */
-    /* unsigned int d_block_sums_len = 4 * grid_sz; // 4-way split */
-    /* checkCudaErrors(cudaMalloc(&d_block_sums, sizeof(unsigned int) * d_block_sums_len)); */
-    /* checkCudaErrors(cudaMemset(d_block_sums, 0, sizeof(unsigned int) * d_block_sums_len)); */
-    /*  */
-    /* // prefix-sum of d_block_sums, e.g. the starting position for each block's 2bit group */
-    /* // (d_scan_block_sums[1] is where block 1's 2bit group 0 should start) */
-    /* unsigned int* d_scan_block_sums; */
-    /* checkCudaErrors(cudaMalloc(&d_scan_block_sums, sizeof(unsigned int) * d_block_sums_len)); */
-    /* checkCudaErrors(cudaMemset(d_scan_block_sums, 0, sizeof(unsigned int) * d_block_sums_len)); */
-    /*  */
-    /* // shared memory consists of 3 arrays the size of the block-wise input */
-    /* //  and 2 arrays the size of n in the current n-way split (4) */
-    /* unsigned int s_data_len = max_elems_per_block; */
-    /* unsigned int s_mask_out_len = max_elems_per_block + 1; */
-    /* unsigned int s_merged_scan_mask_out_len = max_elems_per_block; */
-    /* unsigned int s_mask_out_sums_len = 4; // 4-way split */
-    /* unsigned int s_scan_mask_out_sums_len = 4; */
-    /* unsigned int shmem_sz = (s_data_len  */
-    /*                         + s_mask_out_len */
-    /*                         + s_merged_scan_mask_out_len */
-    /*                         + s_mask_out_sums_len */
-    /*                         + s_scan_mask_out_sums_len) */
-    /*                         * sizeof(unsigned int); */
-
-
-    sort_state_t *state = create_state(d_out, d_in, d_in_len);
-
-    // for every 2 bits from LSB to MSB:
-    //  block-wise radix sort (write blocks back to global memory)
-    for (unsigned int shift_width = 0; shift_width <= 30; shift_width += 2)
+void SortState::Step(int offset, int width) {
+    for (int shift_width = offset; shift_width < offset + width; shift_width += 2)
     {
         // per-block sort. Also creates blockwise prefix sums.
-        gpu_radix_sort_local<<<state->grid_sz, state->block_sz, state->shmem_sz>>>(state->d_out, 
-                                                                state->d_prefix_sums, 
-                                                                state->d_block_sums, 
+        gpu_radix_sort_local<<<grid_sz, block_sz, shmem_sz>>>(d_out, 
+                                                                d_prefix_sums, 
+                                                                d_block_sums, 
                                                                 shift_width, 
-                                                                state->d_in, 
-                                                                state->data_len, 
-                                                                state->block_sz);
+                                                                d_in, 
+                                                                data_len, 
+                                                                block_sz);
 
         // create global prefix sum arrays
-        sum_scan_blelloch(state->d_scan_block_sums, state->d_block_sums, state->block_sums_len);
+        sum_scan_blelloch(d_scan_block_sums, d_block_sums, block_sums_len);
 
         // scatter/shuffle block-wise sorted array to final positions
-        gpu_glbl_shuffle<<<state->grid_sz, state->block_sz>>>(state->d_in, 
-                                                    state->d_out, 
-                                                    state->d_scan_block_sums, 
-                                                    state->d_prefix_sums, 
+        gpu_glbl_shuffle<<<grid_sz, block_sz>>>(d_in, 
+                                                    d_out, 
+                                                    d_scan_block_sums, 
+                                                    d_prefix_sums, 
                                                     shift_width, 
-                                                    state->data_len, 
-                                                    state->block_sz);
+                                                    data_len, 
+                                                    block_sz);
     }
+}
 
-    checkCudaErrors(cudaMemcpy(state->d_out, state->d_in, sizeof(unsigned int) * state->data_len, cudaMemcpyDeviceToDevice));
-
-    destroy_state(state);
-    /* checkCudaErrors(cudaFree(d_scan_block_sums)); */
-    /* checkCudaErrors(cudaFree(d_block_sums)); */
-    /* checkCudaErrors(cudaFree(d_prefix_sums)); */
+void SortState::GetResult(unsigned int *out) {
+    checkCudaErrors(cudaMemcpy(out, d_in, sizeof(unsigned int) * data_len, cudaMemcpyDeviceToHost));
 }
