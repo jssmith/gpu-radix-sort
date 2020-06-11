@@ -6,9 +6,9 @@
 #define LIBSORT_LIBSORT_H
 
 // Sort host-provided input (h_in) in-place using the GPU
-bool providedGpu(unsigned int* h_in, size_t len);
+extern "C" bool providedGpu(unsigned int* h_in, size_t len);
 
 // Sort provided input (in) using the CPU
-bool providedCpu(unsigned int* in, size_t len);
+extern "C" bool providedCpu(unsigned int* in, size_t len);
 
 #endif //LIBSORT_LIBSORT_H

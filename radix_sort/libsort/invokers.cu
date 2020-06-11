@@ -6,7 +6,7 @@
 
 #include "sort.h"
 #include "utils.h"
-#include "pyplover.h"
+/* #include "pyplover.h" */
 
 // Sort provided input (h_in) in-place using the GPU
 // Returns success status
@@ -35,6 +35,6 @@ extern "C" bool providedCpu(unsigned int* in, size_t len) {
 }
 
 // This function can be called by PyPlover as a KaaS function.
-extern "C" void kaasInvoke(state_t *s, int grid, int block) {
-    radix_sort(s.out.dat, s.in.dat, s.in.len / sizeof(unsigned int));
-}
+/* extern "C" void kaasInvoke(state_t *s, int grid, int block) { */
+/*     radix_sort(s->out.dat, s->in.dat, s->in.len / sizeof(unsigned int)); */
+/* } */
