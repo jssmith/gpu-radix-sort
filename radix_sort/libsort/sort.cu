@@ -4,6 +4,25 @@
 
 #define MAX_BLOCK_SZ 128
 
+// Return bits val[pos:width)
+#define group_bits(val, pos, width) ((val >> pos) & ((1 << width) - 1));
+
+// Detect the boundaries of each '[offset, offset+group_width)" group in d_in
+// and place in d_boundaries. d_in is assumed to be already sorted by the group
+// bits. d_boundaries must be 2^group_width long.
+__global__ void gpu_groups(unsigned int* d_boundaries, unsigned int* d_in, int offset, int group_width, unsigned int d_in_len)
+{
+  unsigned int th_idx = blockIdx.x * blockDim.x + threadIdx.x;
+  unsigned int prev_idx = (th_idx == 0) ? 0 : th_idx - 1;
+
+  unsigned int th_group = group_bits(d_in[th_idx], offset, group_width);
+  unsigned int prev_group = group_bits(d_in[prev_idx], offset, group_width);
+
+  if(th_group != prev_group) {
+    d_boundaries[th_group] = th_idx;
+  }
+}
+
 __global__ void gpu_radix_sort_local(unsigned int* d_out_sorted,
     unsigned int* d_prefix_sums,
     unsigned int* d_block_sums,
@@ -54,7 +73,7 @@ __global__ void gpu_radix_sort_local(unsigned int* d_out_sorted,
 
     __syncthreads();
 
-    // To extract the correct 2 bits, we first shift the number
+    //  To extract the correct 2 bits, we first shift the number
     //  to the right until the correct 2 bits are in the 2 LSBs,
     //  then mask on the number with 11 (3) to remove the bits
     //  on the left
@@ -320,6 +339,26 @@ void SortState::Step(int offset, int width) {
                                                     shift_width, 
                                                     data_len, 
                                                     block_sz);
+    }
+}
+ 
+void SortState::GetBoundaries(unsigned int *boundaries, int offset, int width) {
+    int nboundary = (1 << width);
+    unsigned int *d_boundaries;
+    checkCudaErrors(cudaMalloc(&d_boundaries, nboundary*sizeof(unsigned int)));
+
+    gpu_groups<<<grid_sz, block_sz>>>(d_boundaries, d_in, offset, width, data_len);
+
+    checkCudaErrors(cudaMemcpy(boundaries, d_boundaries, sizeof(unsigned int) * nboundary, cudaMemcpyDeviceToHost));
+    checkCudaErrors(cudaFree(d_boundaries));
+
+    // Empty groups can't be detected by gpu_groups() so we have to fill them
+    // in here. nboundaries is assumed to be small so not worth using the GPU
+    // for.
+    for(int group = 1; group < nboundary; group++) {
+      if(boundaries[group] == 0) {
+        boundaries[group] = boundaries[group - 1];
+      }
     }
 }
 

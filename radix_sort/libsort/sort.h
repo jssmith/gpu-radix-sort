@@ -16,6 +16,11 @@ class SortState {
     // multiples of 2).
     void Step(int offset, int width);
 
+    // Returns the start point in the partially sorted array of each group of
+    // [offset, offset+width) bits. You must have used Step to sort this group
+    // (multiple steps are fine so long as the entire group has been covered).
+    void GetBoundaries(unsigned int *boundaries, int offset, int width);
+
     // Copy the (potentially partially) sorted result to out. At least one call
     // to Step must be made before calling GetResult.
     void GetResult(unsigned int *out);

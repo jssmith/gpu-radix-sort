@@ -4,6 +4,12 @@
 
 #ifndef LIBSORT_LIBSORT_H
 #define LIBSORT_LIBSORT_H
+#include <cstdint>
+
+// Perform a partial sort of bits [offset, width). boundaries will contain the
+// index of the first element of each unique group value (each unique value of
+// width bits), it must be 2^width elements long.
+extern "C" bool gpuPartial(uint32_t* h_in, uint32_t *boundaries, size_t h_in_len, uint32_t offset, uint32_t width);
 
 // Sort host-provided input (h_in) in-place using the GPU
 extern "C" bool providedGpu(unsigned int* h_in, size_t len);

@@ -29,17 +29,18 @@ int cmpArrays(unsigned int *a, unsigned int *b, size_t len) {
 
 void printArray(unsigned int *a, size_t len) {
   for(size_t i = 0; i < len; i++) {
-    printf("%u, ", a[i]);
+    printf("0x%8x, ", a[i]);
   }
 }
 
-unsigned int* generate_input(size_t nelem) {
+unsigned int* generate_input(size_t nelem)
+{
     unsigned int* in = new unsigned int[nelem];
 
     srand(1);
     for (unsigned int j = 0; j < nelem; j++)
     {
-        in[j] = rand() % nelem;
+        in[j] = rand();
     }
     return in;
 }
@@ -49,6 +50,67 @@ void free_input(unsigned int *in) {
     delete[] in;
 }
 
+// This simulates a distributed sort with two partitions of the array being
+// sorted independently and combined at each step. Really it's just another
+// layer of standard radix sort, but it uses libsort the same way a real
+// distributed sort would.
+#define DISTRIB_STEP_WIDTH 4
+#define DISTRIB_NBUCKET (1 << DISTRIB_STEP_WIDTH)
+#define DISTRIB_NSTEP (32 / DISTRIB_STEP_WIDTH)
+bool distribSort(uint32_t *data, size_t len)
+{
+  // temporary place for shuffle outputs
+  uint32_t *tmp = new uint32_t[len*sizeof(uint32_t)];
+
+  // Boundary of each radix bucket in each partition
+  uint32_t *p1_bkt_bounds = new uint32_t[DISTRIB_NBUCKET];
+  uint32_t *p2_bkt_bounds = new uint32_t[DISTRIB_NBUCKET];
+
+  size_t p1len = len / 2;
+  size_t p2len = (len / 2) + (len % 2);
+  
+  // We zero copy between steps by switching which array we're using as 'data' and which is for shuffling.
+  uint32_t *cur = data;
+  uint32_t *next = tmp;
+  for(int i = 0; i < DISTRIB_NSTEP; i++) {
+    uint32_t *p1 = &cur[0];
+    uint32_t *p2 = &cur[p1len];
+
+    if(!gpuPartial(p1, p1_bkt_bounds, p1len, i*DISTRIB_STEP_WIDTH, DISTRIB_STEP_WIDTH)) {
+      return false;
+    }
+    if(!gpuPartial(p2, p2_bkt_bounds, p2len, i*DISTRIB_STEP_WIDTH, DISTRIB_STEP_WIDTH)) {
+      return false;
+    }
+
+    //shuffle
+    size_t next_slot = 0;
+    for(int bkt = 0; bkt < DISTRIB_NBUCKET; bkt++) {
+      size_t p1_bkt_len, p2_bkt_len;
+      if(bkt == DISTRIB_NBUCKET - 1) {
+        p1_bkt_len = p1len - p1_bkt_bounds[bkt];
+        p2_bkt_len = p2len - p2_bkt_bounds[bkt];
+      } else {
+        p1_bkt_len = p1_bkt_bounds[bkt+1] - p1_bkt_bounds[bkt];
+        p2_bkt_len = p2_bkt_bounds[bkt+1] - p2_bkt_bounds[bkt];
+      }
+
+      memcpy(&next[next_slot], &p1[p1_bkt_bounds[bkt]], p1_bkt_len*sizeof(uint32_t));
+      next_slot += p1_bkt_len;
+
+      memcpy(&next[next_slot], &p2[p2_bkt_bounds[bkt]], p2_bkt_len*sizeof(uint32_t));
+      next_slot += p2_bkt_len;
+    }
+
+    //swap inputs for zcopy rounds
+    uint32_t *tmp = next;
+    next = cur;
+    cur = tmp;
+  }
+
+  return true;
+}
+
 int main()
 {
     size_t nelem = 1024;
@@ -56,7 +118,9 @@ int main()
     unsigned int* in = generate_input(nelem);
     unsigned int* gpuRes = new unsigned int[nelem];
     unsigned int* cpuRes = new unsigned int[nelem];
+    unsigned int* distribRes = new unsigned int[nelem];
 
+    /* printArray(in, nelem); */
     memcpy(gpuRes, in, nelem*sizeof(unsigned int));
     if(!providedGpu(gpuRes, nelem)) {
         std::cerr << "Failure! Local GPU sorted had an internal error!\n";
@@ -77,19 +141,38 @@ int main()
         return EXIT_FAILURE;
     }
 
+    memcpy(distribRes, in, nelem*sizeof(unsigned int));
+    if(!distribSort(distribRes, nelem)) {
+        std::cerr << "Failure! Distributed sorted array sorted wrong!\n";
+        return EXIT_FAILURE;
+    }
+    if(!checkSort(distribRes, nelem)) {
+        std::cerr << "Failure! Distributed sorted array sorted wrong!\n";
+        return EXIT_FAILURE;
+    }
+
     //Directly compare CPU and GPU based sorts (they ought to agree)
     int diff = cmpArrays(gpuRes, cpuRes, nelem);
     if(diff != -1) {
       std::cerr << "CPU and GPU results disagree!";
       fprintf(stderr, "gpuRes[%d]=%u cpuRes[%d]=%u\n", diff, gpuRes[diff], diff, cpuRes[diff]);
-      printArray(gpuRes, nelem);
+      /* printArray(gpuRes, nelem); */
       return EXIT_FAILURE;
     }
-    /* printArray(gpuRes, nelem); */
 
+    //Directly compare Distrib and GPU based sorts (they ought to agree)
+    diff = cmpArrays(gpuRes, distribRes, nelem);
+    if(diff != -1) {
+      std::cerr << "Distributed and Single Threaded results disagree!";
+      fprintf(stderr, "single threaded Res[%d]=%u distribRes[%d]=%u\n", diff, gpuRes[diff], diff, distribRes[diff]);
+      /* printArray(distribRes, nelem); */
+      return EXIT_FAILURE;
+    }
+    
     std::cout << "Success!\n";
     delete[] gpuRes;
     delete[] cpuRes;
+    delete[] distribRes;
     free_input(in);
 
     return EXIT_SUCCESS;
