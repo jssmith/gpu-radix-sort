@@ -37,7 +37,7 @@ func TestLocalPartial(t *testing.T) {
 	ref := make([]uint32, len(test))
 	copy(ref, test)
 
-	if err = localSortPartial(test, boundaries, (uint32)(0), (uint32)(width)); err != nil {
+	if err = localSortPartial(test, boundaries, 0, width); err != nil {
 		t.Fatalf("Error while sorting: %v", err)
 	}
 

@@ -7,12 +7,19 @@ import (
 
 // Represents a partition of a DistribArray
 type DistribPart interface {
-	// Returns a reader that will returns bytes from the partition, starting
-	// from the beginning.
+	// Returns a reader that will return bytes from the partition in the given
+	// contiguous range. End may be negative to index backwards from the end. A
+	// zero end will read until the end of the partition.
+	GetRangeReader(start, end int64) io.ReadCloser
+
+	// Returns a reader that will return bytes from the entire partition.
 	GetReader() io.ReadCloser
 
 	// Returns a writer that will append to the partition
 	GetWriter() io.WriteCloser
+
+	// Return the number of bytes currently in this partition
+	Len() int64
 }
 
 // Represents an array of bytes that is suitable for a distributed sort.
@@ -22,33 +29,33 @@ type DistribArray interface {
 
 // A reference to an input partition
 type partRef struct {
-	Arr     *DistribArray // DistribArray to read from
-	PartIdx int           // Partition to read from
-	Start   int           // Offset to start reading
-	NByte   int           // Number of bytes to read
+	Arr     DistribArray // DistribArray to read from
+	PartIdx int          // Partition to read from
+	Start   int64        // Offset to start reading
+	NByte   int64        // Number of bytes to read
 }
 
 // Read InBkts in order and sort by the radix of width width and starting at
 // offset Returns a distributed array with one part per unique radix value
-func distribWorker(inBkts []*partRef, offset int, width int) (*DistribArray, error) {
+func distribWorker(inBkts []*partRef, offset int, width int) (DistribArray, error) {
 	var err error
 
-	totalLen := 0
+	totalLen := (int64)(0)
 	for i := 0; i < len(inBkts); i++ {
-		totalLen += inBkts[i].NBytes
+		totalLen += inBkts[i].NByte
 	}
 	nInt := totalLen / 4
 
 	// Fetch data to local memory
 	var inInts = make([]uint32, nInt)
-	inPos := 0
+	inPos := (int64)(0)
 	for i := 0; i < len(inBkts); i++ {
 		bktRef := inBkts[i]
-		parts, err := bktRef.GetParts()
+		parts, err := bktRef.Arr.GetParts()
 		if err != nil {
 			return nil, err
 		}
-		reader := io.LimitReader(parts[bktRef.PartIdx].GetReader(bktRef.Start), bktRef.NByte)
+		reader := parts[bktRef.PartIdx].GetRangeReader(bktRef.Start, bktRef.Start+bktRef.NByte)
 		err = binary.Read(reader, binary.LittleEndian, inInts[inPos:])
 		if err != nil {
 			return nil, err
@@ -78,11 +85,11 @@ func distribWorker(inBkts []*partRef, offset int, width int) (*DistribArray, err
 	for i := 0; i < nBucket; i++ {
 		writer := outParts[i].GetWriter()
 		start := boundaries[i]
-		var end int
+		var end int64
 		if i == nBucket-1 {
 			end = nInt
 		} else {
-			end = boundaries[i+1]
+			end = (int64)(boundaries[i+1])
 		}
 
 		err = binary.Write(writer, binary.LittleEndian, inInts[start:end])
@@ -92,20 +99,20 @@ func distribWorker(inBkts []*partRef, offset int, width int) (*DistribArray, err
 		}
 		writer.Close()
 	}
-	return &outArr, nil
+	return outArr, nil
 }
 
 type distribInputGenerator struct {
 	arrs  []DistribArray
 	parts [][]DistribPart
-	arrX  int // Index of next array to read from
-	partX int // Index of next partition (bucket) to read from
-	dataX int // Index of next address within the partition to read from
-	nArr  int // Number of arrays
-	nPart int // Number of partitions (should be fixed for each array)
+	arrX  int   // Index of next array to read from
+	partX int   // Index of next partition (bucket) to read from
+	dataX int64 // Index of next address within the partition to read from
+	nArr  int   // Number of arrays
+	nPart int   // Number of partitions (should be fixed for each array)
 }
 
-func newDistribInputGenerator(source []DistribArray) (*distribInputIterator, error) {
+func newDistribInputGenerator(source []DistribArray) (*distribInputGenerator, error) {
 	var err error
 
 	parts := make([][]DistribPart, len(source))
@@ -119,46 +126,48 @@ func newDistribInputGenerator(source []DistribArray) (*distribInputIterator, err
 	return &distribInputGenerator{arrs: source, parts: parts,
 		arrX: 0, partX: 0,
 		nArr: len(source), nPart: len(parts[0]),
-	}
+	}, nil
 }
 
 // Return the next group of partReferences to cover sz bytes. If there is no
 // more data, returns io.EOF. The returned partRefs may not contain sz bytes in
 // this case.
-func (self *distribInputGenerator) next(sz int) ([]*partRef, error) {
+func (self *distribInputGenerator) next(sz int64) ([]*partRef, error) {
 	var out []*partRef
 
 	nNeeded := sz
 	for ; self.partX < self.nPart; self.partX++ {
-		for ; self.arrX < nArr; self.arrX++ {
+		for ; self.arrX < self.nArr; self.arrX++ {
 			part := self.parts[self.arrX][self.partX]
 			for self.dataX < part.Len() {
 				nRemaining := part.Len() - self.dataX
 
+				var toWrite int64
 				if nRemaining <= nNeeded {
-					toWrite := nRemaining
+					toWrite = nRemaining
 				} else {
-					toWrite := nNeeded
+					toWrite = nNeeded
 				}
-				out = append(out, &partRef{Arr: self.arrs[self.arrX], PartIdx: self.partX, Start: self.dataX, Nbyte: toWrite})
+				out = append(out, &partRef{Arr: self.arrs[self.arrX], PartIdx: self.partX, Start: self.dataX, NByte: toWrite})
 				self.dataX += toWrite
 				nNeeded -= toWrite
 
 				if nNeeded == 0 {
-					return &out, nil
+					return out, nil
 				}
 			}
 			self.dataX = 0
 		}
 		self.arrX = 0
 	}
-	return &out, io.EOF
+	return out, io.EOF
 }
 
 // Distributed sort of arr. The bytes in arr will be interpreted as uint32's
 // Returns an ordered list of distributed arrays containing the sorted output
-// (concatenate each array's partitions in order to get final result)
-func sortDistrib(arr DistribArray) ([]DistribArray, error) {
+// (concatenate each array's partitions in order to get final result). 'Len' is
+// the number of bytes in arr.
+func sortDistrib(arr DistribArray, size int64) ([]DistribArray, error) {
 	// Data Layout:
 	//	 - Distrib Arrays store all output from a single node
 	//	 - DistribParts represent radix sort buckets (there will be nbucket parts per DistribArray)
@@ -174,28 +183,31 @@ func sortDistrib(arr DistribArray) ([]DistribArray, error) {
 	//	   always exist.
 	//	 - Input distribArrays may be garbage collected after every worker has
 	//     provided their output (output distribArrays are copies, not references).
-	nworker := 2           //number of workers (degree of parallelism)
-	width := 4             //number of bits to sort per round
-	nbucket := (1 << step) //number of unique width-sized values
-	nstep := (32 / width)  // number of steps needed to fully sort
-
-	var err error
+	nworker := 2          //number of workers (degree of parallelism)
+	width := 4            //number of bits to sort per round
+	nstep := (32 / width) // number of steps needed to fully sort
 
 	// Target number of bytes to process per worker
-	nPerWorker := (len(arr) / nworker)
-	inputs := make([][]*partRef, nworker)
-	outputs := make([]DistribArray, nworker)
+	nPerWorker := (size / (int64)(nworker))
 
 	// Initial input is the output for "step -1"
-	outputs[workerId] = []DistribArray{arr}
+	var outputs []DistribArray
+	outputs = []DistribArray{arr}
 
 	for step := 0; step < nstep; step++ {
-		inGen := newDistribInputGenerator(outputs)
+		inputs := outputs
+		outputs = make([]DistribArray, nworker)
+
+		inGen, err := newDistribInputGenerator(inputs)
+		if err != nil {
+			return nil, err
+		}
+
 		for workerId := 0; workerId < nworker; workerId++ {
 			// Repartition previous output
-			inputs, genErr := inGen.next(nPerWorker)
+			workerInputs, genErr := inGen.next(nPerWorker)
 			if genErr == io.EOF {
-				if len(inputs) == 0 {
+				if len(workerInputs) == 0 {
 					// iterator is allowed to issue EOF either with the last
 					// data, or on the next call after all the data is read
 					break
@@ -204,7 +216,7 @@ func sortDistrib(arr DistribArray) ([]DistribArray, error) {
 				return nil, genErr
 			}
 
-			outputs[workerId], err = distribWorker(inputs, step*width, width)
+			outputs[workerId], err = distribWorker(workerInputs, step*width, width)
 			if err != nil {
 				return nil, err
 			}
@@ -214,4 +226,5 @@ func sortDistrib(arr DistribArray) ([]DistribArray, error) {
 			}
 		}
 	}
+	return outputs, nil
 }

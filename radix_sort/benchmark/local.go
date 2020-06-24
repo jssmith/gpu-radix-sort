@@ -22,7 +22,7 @@ func localSort(in []uint32) error {
 
 // Sort in in-place using only process-local resources (no distribution or
 // external storage). Uses libsort.
-func localSortPartial(in []uint32, boundaries []uint32, offset uint32, width uint32) error {
+func localSortPartial(in []uint32, boundaries []uint32, offset int, width int) error {
 	success, _ := C.gpuPartial((*C.uint32_t)(&in[0]),
 		(*C.uint32_t)(&boundaries[0]),
 		(C.size_t)(len(in)),
