@@ -1,8 +1,9 @@
-package main
+package faas
 
 import (
 	"encoding/base64"
 	"encoding/binary"
+	"fmt"
 	"strings"
 )
 
@@ -36,12 +37,6 @@ type FaasArg struct {
 }
 
 func NewFaasArg(requestType string, intData []uint32) (*FaasArg, error) {
-	// numElem := len(respBytes) / 4
-	// respInts := make([]uint32, numElem)
-	// for i := 0; i < numElem; i++ {
-	// 	respInts[i] = binary.LittleEndian.Uint32(respBytes[(i * 4):(i*4 + 4)])
-	// }
-
 	nChar := base64.StdEncoding.EncodedLen(len(intData) * 4)
 	var encData strings.Builder
 	encData.Grow(nChar)
@@ -53,6 +48,22 @@ func NewFaasArg(requestType string, intData []uint32) (*FaasArg, error) {
 	encoder.Close()
 
 	return &FaasArg{requestType, encData.String()}, nil
+}
+
+func DecodeFaasResp(encoded string) ([]uint32, error) {
+	// Convert the contents from base64 encoded to bytes[]
+	bytes, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to decode response: %v", err)
+	}
+
+	numElem := len(bytes) / 4
+	ints := make([]uint32, numElem)
+	for i := 0; i < numElem; i++ {
+		ints[i] = binary.LittleEndian.Uint32(bytes[(i * 4):(i*4 + 4)])
+	}
+
+	return ints, nil
 }
 
 // Example input to the kaas sorter. This represents 1024 uint32s to be sorted (they were generated randomly)

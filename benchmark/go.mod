@@ -1,4 +1,4 @@
-module github.com/nathantp/gpu-radix-sort/radix_sort/benchmark
+module github.com/nathantp/gpu-radix-sort/benchmark
 
 go 1.13
 

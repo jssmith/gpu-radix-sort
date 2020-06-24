@@ -1,4 +1,4 @@
-package main
+package faas
 
 import (
 	"testing"
@@ -17,7 +17,7 @@ func TestNewFaas(t *testing.T) {
 		t.Fatalf("Constructor failed: %v", err)
 	}
 
-	decoded, err := b64ToIntSlice(fArg.Data)
+	decoded, err := DecodeFaasResp(fArg.Data)
 	if err != nil {
 		t.Fatalf("Could not decode output: %v", err)
 	}

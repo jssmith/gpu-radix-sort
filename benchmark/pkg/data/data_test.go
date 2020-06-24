@@ -1,7 +1,6 @@
-package main
+package data
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -157,84 +156,4 @@ func testDistribArrUints(t *testing.T, arr DistribArray, npart int, partLen int)
 		err = checkPart(part, rawParts[partIdx])
 		require.Nilf(t, err, "Re-Opened Partition %v validation failure: %v", partIdx, err)
 	}
-}
-
-func testRangeReader(t *testing.T, part *MemDistribPart, start int, stop int) {
-	// semantics of RangeReader
-	var realStop int
-	if stop <= 0 {
-		realStop = len(part.buf) + stop
-	} else {
-		realStop = stop
-	}
-
-	readLen := realStop - start
-
-	out := make([]byte, len(part.buf))
-	reader := part.GetRangeReader((int64)(start), (int64)(stop))
-	n, err := reader.Read(out)
-	require.Equalf(t, io.EOF, err, "Didn't return EOF")
-	require.Equalf(t, readLen, n, "Didn't read enough values")
-	require.Truef(t, bytes.Equal(out[:readLen], part.buf[start:realStop]), "Returned wrong values: expected %v, got %v", part.buf, out)
-}
-
-func TestMemDistribPartRange(t *testing.T) {
-	var err error
-	pBuf := []byte{0, 1, 2, 3}
-	p, err := NewMemDistribPart(pBuf)
-	require.Nil(t, err)
-
-	t.Run("Full Range", func(t *testing.T) { testRangeReader(t, p, 0, 0) })
-	t.Run("First Two", func(t *testing.T) { testRangeReader(t, p, 0, 2) })
-	t.Run("Middle", func(t *testing.T) { testRangeReader(t, p, 1, 3) })
-	t.Run("Last Two Explicit", func(t *testing.T) { testRangeReader(t, p, 3, 4) })
-	t.Run("Last Two Zero End", func(t *testing.T) { testRangeReader(t, p, 3, 0) })
-	t.Run("Negative End", func(t *testing.T) { testRangeReader(t, p, 1, -1) })
-}
-
-func TestMemDistribPart(t *testing.T) {
-	pBuf := make([]byte, 0)
-	p, err := NewMemDistribPart(pBuf)
-	require.Nil(t, err)
-
-	require.Zerof(t, len(p.buf), "Initial partition has non-zero length: %v", len(p.buf))
-
-	writer := p.GetWriter()
-	n, err := writer.Write([]byte{(byte)(42)})
-	require.Nilf(t, err, "Write reported an error: %v", err)
-	writer.Close()
-
-	require.NotZerof(t, n, "Writer didn't report writing anything")
-	require.Equalf(t, 1, len(p.buf), "Writer expanded slice wrong: Expected 1, Got %v", len(p.buf))
-	require.Equalf(t, (byte)(42), p.buf[0], "Wrote incorrect value: Expected 42, Got %v", p.buf[0])
-
-	reader := p.GetReader()
-	out := make([]byte, 1)
-	n, err = reader.Read(out)
-	require.Equalf(t, err, io.EOF, "Read did not report EOF, actual error: %v", err)
-	reader.Close()
-
-	require.Equalf(t, 1, n, "Reader reported wrong number of bytes")
-	require.Equalf(t, 1, len(out), "Reader broke slice length")
-	require.Equalf(t, (byte)(42), out[0], "Read Incorrect Value")
-}
-
-func TestMemDistribArrUints(t *testing.T) {
-	npart := 2
-	partLen := 1024
-
-	arr, err := NewMemDistribArray(npart)
-	require.Nilf(t, err, "Failed to initialize array: %v", err)
-
-	testDistribArrUints(t, arr, npart, partLen)
-}
-
-func TestMemDistribArrBytes(t *testing.T) {
-	npart := 2
-	partLen := 64
-
-	arr, err := NewMemDistribArray(npart)
-	require.Nilf(t, err, "Failed to initialize array: %v", err)
-
-	testDistribArrBytes(t, arr, npart, partLen)
 }

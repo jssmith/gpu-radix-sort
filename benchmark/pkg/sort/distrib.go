@@ -1,43 +1,23 @@
-package main
+package sort
 
 import (
 	"encoding/binary"
 	"io"
+
+	"github.com/nathantp/gpu-radix-sort/benchmark/pkg/data"
 )
-
-// Represents a partition of a DistribArray
-type DistribPart interface {
-	// Returns a reader that will return bytes from the partition in the given
-	// contiguous range. End may be negative to index backwards from the end. A
-	// zero end will read until the end of the partition.
-	GetRangeReader(start, end int64) io.ReadCloser
-
-	// Returns a reader that will return bytes from the entire partition.
-	GetReader() io.ReadCloser
-
-	// Returns a writer that will append to the partition
-	GetWriter() io.WriteCloser
-
-	// Return the number of bytes currently in this partition
-	Len() int64
-}
-
-// Represents an array of bytes that is suitable for a distributed sort.
-type DistribArray interface {
-	GetParts() ([]DistribPart, error)
-}
 
 // A reference to an input partition
 type partRef struct {
-	Arr     DistribArray // DistribArray to read from
-	PartIdx int          // Partition to read from
-	Start   int64        // Offset to start reading
-	NByte   int64        // Number of bytes to read
+	Arr     data.DistribArray // DistribArray to read from
+	PartIdx int               // Partition to read from
+	Start   int64             // Offset to start reading
+	NByte   int64             // Number of bytes to read
 }
 
 // Read InBkts in order and sort by the radix of width width and starting at
 // offset Returns a distributed array with one part per unique radix value
-func distribWorker(inBkts []*partRef, offset int, width int) (DistribArray, error) {
+func distribWorker(inBkts []*partRef, offset int, width int) (data.DistribArray, error) {
 	var err error
 
 	totalLen := (int64)(0)
@@ -72,7 +52,7 @@ func distribWorker(inBkts []*partRef, offset int, width int) (DistribArray, erro
 	}
 
 	// Write Outputs
-	outArr, err := NewMemDistribArray(nBucket)
+	outArr, err := data.NewMemDistribArray(nBucket)
 	if err != nil {
 		return nil, err
 	}
@@ -103,8 +83,8 @@ func distribWorker(inBkts []*partRef, offset int, width int) (DistribArray, erro
 }
 
 type distribInputGenerator struct {
-	arrs  []DistribArray
-	parts [][]DistribPart
+	arrs  []data.DistribArray
+	parts [][]data.DistribPart
 	arrX  int   // Index of next array to read from
 	partX int   // Index of next partition (bucket) to read from
 	dataX int64 // Index of next address within the partition to read from
@@ -112,10 +92,10 @@ type distribInputGenerator struct {
 	nPart int   // Number of partitions (should be fixed for each array)
 }
 
-func newDistribInputGenerator(source []DistribArray) (*distribInputGenerator, error) {
+func newDistribInputGenerator(source []data.DistribArray) (*distribInputGenerator, error) {
 	var err error
 
-	parts := make([][]DistribPart, len(source))
+	parts := make([][]data.DistribPart, len(source))
 	for i, arr := range source {
 		parts[i], err = arr.GetParts()
 		if err != nil {
@@ -167,7 +147,7 @@ func (self *distribInputGenerator) next(sz int64) ([]*partRef, error) {
 // Returns an ordered list of distributed arrays containing the sorted output
 // (concatenate each array's partitions in order to get final result). 'Len' is
 // the number of bytes in arr.
-func sortDistrib(arr DistribArray, size int64) ([]DistribArray, error) {
+func sortDistrib(arr data.DistribArray, size int64) ([]data.DistribArray, error) {
 	// Data Layout:
 	//	 - Distrib Arrays store all output from a single node
 	//	 - DistribParts represent radix sort buckets (there will be nbucket parts per DistribArray)
@@ -191,12 +171,12 @@ func sortDistrib(arr DistribArray, size int64) ([]DistribArray, error) {
 	nPerWorker := (size / (int64)(nworker))
 
 	// Initial input is the output for "step -1"
-	var outputs []DistribArray
-	outputs = []DistribArray{arr}
+	var outputs []data.DistribArray
+	outputs = []data.DistribArray{arr}
 
 	for step := 0; step < nstep; step++ {
 		inputs := outputs
-		outputs = make([]DistribArray, nworker)
+		outputs = make([]data.DistribArray, nworker)
 
 		inGen, err := newDistribInputGenerator(inputs)
 		if err != nil {

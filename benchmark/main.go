@@ -2,16 +2,15 @@ package main
 
 import (
 	"bytes"
-	"encoding/base64"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"math/rand"
 	"os"
-	"sort"
 
 	"github.com/serverlessresearch/srk/pkg/srkmgr"
 	"github.com/sirupsen/logrus"
+
+	"github.com/nathantp/gpu-radix-sort/benchmark/pkg/faas"
+	"github.com/nathantp/gpu-radix-sort/benchmark/pkg/sort"
 )
 
 // Generic invoker function for tests
@@ -39,25 +38,9 @@ func getMgr() *srkmgr.SrkManager {
 	return mgr
 }
 
-func b64ToIntSlice(encoded string) ([]uint32, error) {
-	// Convert the contents from base64 encoded to bytes[]
-	bytes, err := base64.StdEncoding.DecodeString(encoded)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to decode response: %v", err)
-	}
-
-	numElem := len(bytes) / 4
-	ints := make([]uint32, numElem)
-	for i := 0; i < numElem; i++ {
-		ints[i] = binary.LittleEndian.Uint32(bytes[(i * 4):(i*4 + 4)])
-	}
-
-	return ints, nil
-}
-
 // Invoke the vector add kernel once and synchronously wait for a response.
 // Returns the list of sorted integers
-func invokeFaas(mgr *srkmgr.SrkManager, arg *FaasArg) ([]uint32, error) {
+func invokeFaas(mgr *srkmgr.SrkManager, arg *faas.FaasArg) ([]uint32, error) {
 
 	jsonArg, err := json.Marshal(arg)
 	if err != nil {
@@ -80,7 +63,7 @@ func invokeFaas(mgr *srkmgr.SrkManager, arg *FaasArg) ([]uint32, error) {
 		return nil, fmt.Errorf("Remote Task Failed")
 	}
 
-	return b64ToIntSlice(resp.Result)
+	return faas.DecodeFaasResp(resp.Result)
 }
 
 func printCSV(m map[string]float64) {
@@ -107,31 +90,6 @@ func reportStats(mgr *srkmgr.SrkManager) {
 	fmt.Printf("\n\n")
 }
 
-func generateInputs(len int) []uint32 {
-	rand.Seed(0)
-	out := make([]uint32, len)
-	for i := 0; i < len; i++ {
-		out[i] = rand.Uint32()
-	}
-	return out
-}
-
-func checkRes(orig []uint32, new []uint32) error {
-	if len(orig) != len(new) {
-		return fmt.Errorf("Lengths do not match: Expected %v, Got %v\n", len(orig), len(new))
-	}
-
-	origCpy := make([]uint32, len(orig))
-	copy(origCpy, orig)
-	sort.Slice(origCpy, func(i, j int) bool { return origCpy[i] < origCpy[j] })
-	for i := 0; i < len(orig); i++ {
-		if origCpy[i] != new[i] {
-			return fmt.Errorf("Response doesn't match reference at %v\n: Expected %v, Got %v\n", i, origCpy[i], new[i])
-		}
-	}
-	return nil
-}
-
 func main() {
 	retcode := 0
 	defer func() { os.Exit(retcode) }()
@@ -140,8 +98,8 @@ func main() {
 	mgr := getMgr()
 	defer mgr.Destroy()
 
-	inputs := generateInputs(32)
-	fArg, err := NewFaasArg("provided", inputs)
+	inputs := sort.RandomInputs(32)
+	fArg, err := faas.NewFaasArg("provided", inputs)
 	if err != nil {
 		fmt.Printf("Failed to create FaaS Argument: %v", err)
 		retcode = 1
@@ -155,7 +113,7 @@ func main() {
 		return
 	}
 
-	err = checkRes(inputs, outputs)
+	err = sort.CheckSort(inputs, outputs)
 	if err != nil {
 		fmt.Printf("Sorted Wrong: %v\n", err)
 		retcode = 1

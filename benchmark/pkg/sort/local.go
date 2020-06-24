@@ -1,10 +1,10 @@
-package main
+package sort
 
 // These are mostly convenient go wrappers for libsort so I don't have to
 // repeat all the cgo nonsense everywhere
 
-// #cgo CFLAGS: -O3 -I../libsort --std=gnu99
-// #cgo LDFLAGS: -L../libsort -lsort
+// #cgo CFLAGS: -O3 -I../../../libsort --std=gnu99
+// #cgo LDFLAGS: -L../../../libsort -lsort
 // #include "libsort.h"
 import "C"
 import "errors"

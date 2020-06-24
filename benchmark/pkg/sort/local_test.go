@@ -1,14 +1,41 @@
-package main
+package sort
 
 import (
+	"fmt"
+	"math/rand"
 	"sort"
 	"testing"
 )
 
+func RandomInputs(len int) []uint32 {
+	rand.Seed(0)
+	out := make([]uint32, len)
+	for i := 0; i < len; i++ {
+		out[i] = rand.Uint32()
+	}
+	return out
+}
+
+func CheckSort(orig []uint32, new []uint32) error {
+	if len(orig) != len(new) {
+		return fmt.Errorf("Lengths do not match: Expected %v, Got %v\n", len(orig), len(new))
+	}
+
+	origCpy := make([]uint32, len(orig))
+	copy(origCpy, orig)
+	sort.Slice(origCpy, func(i, j int) bool { return origCpy[i] < origCpy[j] })
+	for i := 0; i < len(orig); i++ {
+		if origCpy[i] != new[i] {
+			return fmt.Errorf("Response doesn't match reference at %v\n: Expected %v, Got %v\n", i, origCpy[i], new[i])
+		}
+	}
+	return nil
+}
+
 func TestLocal(t *testing.T) {
 	var err error
 
-	test := generateInputs(1024)
+	test := RandomInputs(1024)
 
 	ref := make([]uint32, len(test))
 	copy(ref, test)
@@ -17,7 +44,7 @@ func TestLocal(t *testing.T) {
 		t.Fatalf("Error while sorting: %v", err)
 	}
 
-	if err := checkRes(ref, test); err != nil {
+	if err := CheckSort(ref, test); err != nil {
 		t.Fatalf("Sorted Wrong: %v", err)
 	}
 }
@@ -31,7 +58,7 @@ func TestLocalPartial(t *testing.T) {
 	width := 4
 	nbucket := 1 << width
 
-	test := generateInputs(size)
+	test := RandomInputs(size)
 	boundaries := make([]uint32, nbucket)
 
 	ref := make([]uint32, len(test))
