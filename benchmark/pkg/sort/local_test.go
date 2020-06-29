@@ -1,36 +1,11 @@
 package sort
 
 import (
-	"fmt"
-	"math/rand"
 	"sort"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
-
-func RandomInputs(len int) []uint32 {
-	rand.Seed(0)
-	out := make([]uint32, len)
-	for i := 0; i < len; i++ {
-		out[i] = rand.Uint32()
-	}
-	return out
-}
-
-func CheckSort(orig []uint32, new []uint32) error {
-	if len(orig) != len(new) {
-		return fmt.Errorf("Lengths do not match: Expected %v, Got %v\n", len(orig), len(new))
-	}
-
-	origCpy := make([]uint32, len(orig))
-	copy(origCpy, orig)
-	sort.Slice(origCpy, func(i, j int) bool { return origCpy[i] < origCpy[j] })
-	for i := 0; i < len(orig); i++ {
-		if origCpy[i] != new[i] {
-			return fmt.Errorf("Response doesn't match reference at %v\n: Expected %v, Got %v\n", i, origCpy[i], new[i])
-		}
-	}
-	return nil
-}
 
 func TestLocal(t *testing.T) {
 	var err error
@@ -46,6 +21,36 @@ func TestLocal(t *testing.T) {
 
 	if err := CheckSort(ref, test); err != nil {
 		t.Fatalf("Sorted Wrong: %v", err)
+	}
+}
+
+func checkPartial(t *testing.T, test []uint32, boundaries []uint32, orig []uint32) {
+	// Make sure the partial sort worked and set the boundaries correctly
+	// Start at uint32_max to detect bucket 0 (will roll over when we increment)
+
+	// len(boundaries) is 2^radixWidth, -1 gives us ones for the first width bits
+	mask := (uint32)(len(boundaries) - 1)
+
+	require.Equal(t, len(orig), len(test), "Test array has the wrong length")
+	size := len(test)
+
+	curBucket := ^(uint32)(0)
+	for i := 0; i < size; i++ {
+		bucket := test[i] & mask
+		if bucket != curBucket {
+			require.Equal(t, curBucket+1, bucket, "Buckets not in order")
+			require.Equalf(t, boundaries[bucket], (uint32)(i), "Boundary for end of bucket %v is wrong", i)
+
+			curBucket = bucket
+		}
+	}
+
+	// Make sure all the right values are in the output, the sort here is just
+	// to compare set membership.
+	sort.Slice(orig, func(i, j int) bool { return orig[i] < orig[j] })
+	sort.Slice(test, func(i, j int) bool { return test[i] < test[j] })
+	for i := 0; i < size; i++ {
+		require.Equal(t, orig[i], test[i], "Output does not contain all the same values as the input")
 	}
 }
 
@@ -68,30 +73,5 @@ func TestLocalPartial(t *testing.T) {
 		t.Fatalf("Error while sorting: %v", err)
 	}
 
-	// Make sure the partial sort worked and set the boundaries correctly
-	// Start at uint32_max to detect bucket 0 (will roll over when we increment)
-	curBucket := ^(uint32)(0)
-	for i := 0; i < size; i++ {
-		bucket := test[i] & ((1 << width) - 1)
-		if bucket != curBucket {
-			if bucket != curBucket+1 {
-				t.Fatalf("Buckets not in order: expected %v, got %v", curBucket+1, bucket)
-			}
-			if boundaries[bucket] != (uint32)(i) {
-				t.Fatalf("Boundary for end of bucket %v is wrong: expected %v, got %v", curBucket, i, boundaries[bucket])
-			}
-			curBucket = bucket
-		}
-	}
-
-	// Make sure all the right values are in the output (e.g. if
-	// localSortPartial erroneously set everything to 0 the above check would
-	// still pass)
-	sort.Slice(ref, func(i, j int) bool { return ref[i] < ref[j] })
-	sort.Slice(test, func(i, j int) bool { return test[i] < test[j] })
-	for i := 0; i < size; i++ {
-		if ref[i] != test[i] {
-			t.Fatalf("Output does not contain the same values as the input")
-		}
-	}
+	checkPartial(t, test, boundaries, ref)
 }
