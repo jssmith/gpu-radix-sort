@@ -53,24 +53,24 @@ func NewMemDistribPart(p []byte) (*MemDistribPart, error) {
 	return &MemDistribPart{buf: p}, nil
 }
 
-func (self *MemDistribPart) GetRangeReader(start, end int64) io.ReadCloser {
+func (self *MemDistribPart) GetRangeReader(start, end int64) (io.ReadCloser, error) {
 	if end <= 0 {
-		return &MemDistribPartReadCloser{p: self, start: start, limit: (int64)(len(self.buf)) + end}
+		return &MemDistribPartReadCloser{p: self, start: start, limit: (int64)(len(self.buf)) + end}, nil
 	} else {
-		return &MemDistribPartReadCloser{p: self, start: start, limit: end}
+		return &MemDistribPartReadCloser{p: self, start: start, limit: end}, nil
 	}
 }
 
-func (self *MemDistribPart) GetReader() io.ReadCloser {
+func (self *MemDistribPart) GetReader() (io.ReadCloser, error) {
 	return self.GetRangeReader(0, 0)
 }
 
-func (self *MemDistribPart) GetWriter() io.WriteCloser {
-	return &MemDistribPartWriteCloser{p: self}
+func (self *MemDistribPart) GetWriter() (io.WriteCloser, error) {
+	return &MemDistribPartWriteCloser{p: self}, nil
 }
 
-func (self *MemDistribPart) Len() int64 {
-	return (int64)(len(self.buf))
+func (self *MemDistribPart) Len() (int64, error) {
+	return (int64)(len(self.buf)), nil
 }
 
 // In-memory 'distributed' array. Does not provide any persistence and cannot

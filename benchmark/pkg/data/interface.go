@@ -9,16 +9,16 @@ type DistribPart interface {
 	// Returns a reader that will return bytes from the partition in the given
 	// contiguous range. End may be negative to index backwards from the end. A
 	// zero end will read until the end of the partition.
-	GetRangeReader(start, end int64) io.ReadCloser
+	GetRangeReader(start, end int64) (io.ReadCloser, error)
 
 	// Returns a reader that will return bytes from the entire partition.
-	GetReader() io.ReadCloser
+	GetReader() (io.ReadCloser, error)
 
 	// Returns a writer that will append to the partition
-	GetWriter() io.WriteCloser
+	GetWriter() (io.WriteCloser, error)
 
 	// Return the number of bytes currently in this partition
-	Len() int64
+	Len() (int64, error)
 }
 
 // Represents an array of bytes that is suitable for a distributed sort.

@@ -26,7 +26,9 @@ func TestLocalDistribWorker(t *testing.T) {
 	parts, err := origArr.GetParts()
 	require.Nil(t, err)
 
-	writer := parts[0].GetWriter()
+	writer, err := parts[0].GetWriter()
+	require.Nil(t, err, "Failed to get writer")
+
 	err = binary.Write(writer, binary.LittleEndian, origRaw)
 	require.Nil(t, err)
 	writer.Close()
@@ -44,14 +46,19 @@ func TestLocalDistribWorker(t *testing.T) {
 	boundaries := make([]uint32, npart)
 	totalLen := 0
 	for i, p := range outParts {
-		bucketLen := (int)(p.Len() / 4)
+		partLen, err := p.Len()
+		require.Nilf(t, err, "Failed to determine length of output partition %v", i)
+
+		bucketLen := (int)(partLen / 4)
 
 		boundaries[i] = (uint32)(totalLen)
 
 		totalLen += bucketLen
 		require.LessOrEqual(t, totalLen, nElem, "Too much data returned")
 
-		reader := p.GetReader()
+		reader, err := p.GetReader()
+		require.Nilf(t, err, "Failed to get reader for output partition %v", i)
+
 		err = binary.Read(reader, binary.LittleEndian, outRaw[boundaries[i]:totalLen])
 		require.Nilf(t, err, "Failed to read bucket %v", i)
 		reader.Close()
@@ -82,7 +89,9 @@ func TestFetchDistribArrays(t *testing.T) {
 		for partX := 0; partX < npart; partX++ {
 			startIdx := (arrX * arrSz) + (partX * partSz)
 
-			writer := parts[partX].GetWriter()
+			writer, err := parts[partX].GetWriter()
+			require.Nilf(t, err, "Failed to get writer for partition %v", partX)
+
 			err = binary.Write(writer, binary.LittleEndian, rawIn[startIdx:startIdx+partSz])
 			require.Nil(t, err, "Failed to write initial data")
 			writer.Close()
@@ -119,7 +128,9 @@ func generateArrs(t *testing.T, narr, npart, elemPerPart int) []data.DistribArra
 			// data)
 			partRaw := bytes.Repeat([]byte{(byte)((partX << 4) | arrX)}, elemPerPart)
 
-			writer := parts[partX].GetWriter()
+			writer, err := parts[partX].GetWriter()
+			require.Nilf(t, err, "Failed to get writer for output %v:%v", arrX, partX)
+
 			n, err := writer.Write(partRaw)
 			require.Equal(t, elemPerPart, n, "Didn't write enough to initial data")
 			require.Nil(t, err, "Failed to write initial data")
@@ -258,7 +269,9 @@ func TestBucketRefIterator(t *testing.T) {
 				refParts, err := ref.Arr.GetParts()
 				require.Nilf(t, err, "Input %v:%v: failed to read partitions", inX, refX)
 
-				reader := refParts[ref.PartIdx].GetRangeReader(ref.Start, ref.Start+ref.NByte)
+				reader, err := refParts[ref.PartIdx].GetRangeReader(ref.Start, ref.Start+ref.NByte)
+				require.Nilf(t, err, "Failed to get reader for %vth reference", refX)
+
 				refRaw, err := ioutil.ReadAll(reader)
 				require.Nil(t, err, "Failed to read from reference %v", refX)
 				reader.Close()
@@ -299,7 +312,9 @@ func TestSortDistrib(t *testing.T) {
 	parts, err := origArr.GetParts()
 	require.Nil(t, err)
 
-	writer := parts[0].GetWriter()
+	writer, err := parts[0].GetWriter()
+	require.Nilf(t, err, "Failed to get writer for partition")
+
 	err = binary.Write(writer, binary.LittleEndian, origRaw)
 	require.Nil(t, err)
 	writer.Close()

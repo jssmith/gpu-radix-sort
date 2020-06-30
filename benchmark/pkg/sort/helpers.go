@@ -43,10 +43,20 @@ func FetchDistribArraysStrided(arrs []data.DistribArray, npart int) ([]uint32, e
 	for partX := 0; partX < npart; partX++ {
 		for arrX := 0; arrX < len(arrs); arrX++ {
 			part := parts[arrX][partX]
-			nPartElem := part.Len() / 4
+
+			partLen, err := part.Len()
+			if err != nil {
+				return nil, errors.Wrapf(err, "Failed to determine length for input %v:%v", arrX, partX)
+			}
+
+			nPartElem := partLen / 4
 			partOut := make([]uint32, nPartElem)
 
-			reader := part.GetReader()
+			reader, err := part.GetReader()
+			if err != nil {
+				return nil, errors.Wrapf(err, "Failed to get reader for input %v:%v", arrX, partX)
+			}
+
 			err = binary.Read(reader, binary.LittleEndian, partOut)
 			if err != nil {
 				return nil, errors.Wrapf(err, "Failed to read from array %v, part %v", arrX, partX)
@@ -78,10 +88,19 @@ func FetchDistribArrays(arrs []data.DistribArray) ([]uint32, error) {
 		}
 
 		for partX, part := range parts {
-			nPartElem := part.Len() / 4
+			partLen, err := part.Len()
+			if err != nil {
+				return nil, errors.Wrapf(err, "Couldn't determine length of input %v:%v", arrX, partX)
+			}
+
+			nPartElem := partLen / 4
 			partOut := make([]uint32, nPartElem)
 
-			reader := part.GetReader()
+			reader, err := part.GetReader()
+			if err != nil {
+				return nil, errors.Wrapf(err, "Failed to get reader for input %v:%v", arrX, partX)
+			}
+
 			err = binary.Read(reader, binary.LittleEndian, partOut)
 			if err != nil {
 				return nil, errors.Wrapf(err, "Failed to read from array %v, part %v", arrX, partX)

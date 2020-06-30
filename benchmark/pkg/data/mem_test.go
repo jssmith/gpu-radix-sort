@@ -20,7 +20,9 @@ func testMemRangeReader(t *testing.T, part *MemDistribPart, start int, stop int)
 	readLen := realStop - start
 
 	out := make([]byte, len(part.buf))
-	reader := part.GetRangeReader((int64)(start), (int64)(stop))
+	reader, err := part.GetRangeReader((int64)(start), (int64)(stop))
+	require.Nil(t, err, "Failed to get reader")
+
 	n, err := reader.Read(out)
 	require.Equalf(t, io.EOF, err, "Didn't return EOF")
 	require.Equalf(t, readLen, n, "Didn't read enough values")
@@ -48,7 +50,9 @@ func TestMemDistribPart(t *testing.T) {
 
 	require.Zerof(t, len(p.buf), "Initial partition has non-zero length: %v", len(p.buf))
 
-	writer := p.GetWriter()
+	writer, err := p.GetWriter()
+	require.Nil(t, err, "Failed to get writer")
+
 	n, err := writer.Write([]byte{(byte)(42)})
 	require.Nilf(t, err, "Write reported an error: %v", err)
 	writer.Close()
@@ -57,7 +61,9 @@ func TestMemDistribPart(t *testing.T) {
 	require.Equalf(t, 1, len(p.buf), "Writer expanded slice wrong: Expected 1, Got %v", len(p.buf))
 	require.Equalf(t, (byte)(42), p.buf[0], "Wrote incorrect value: Expected 42, Got %v", p.buf[0])
 
-	reader := p.GetReader()
+	reader, err := p.GetReader()
+	require.Nil(t, err, "Failed to get reader")
+
 	out := make([]byte, 1)
 	n, err = reader.Read(out)
 	require.Equalf(t, err, io.EOF, "Read did not report EOF, actual error: %v", err)

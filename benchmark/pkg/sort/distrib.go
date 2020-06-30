@@ -36,7 +36,11 @@ func localDistribWorker(inBkts []*PartRef, offset int, width int) (data.DistribA
 		if err != nil {
 			return nil, errors.Wrapf(err, "Couldn't get partitions from input ref %v", i)
 		}
-		reader := parts[bktRef.PartIdx].GetRangeReader(bktRef.Start, bktRef.Start+bktRef.NByte)
+		reader, err := parts[bktRef.PartIdx].GetRangeReader(bktRef.Start, bktRef.Start+bktRef.NByte)
+		if err != nil {
+			return nil, errors.Wrapf(err, "Couldn't read partition from ref %v", i)
+		}
+
 		err = binary.Read(reader, binary.LittleEndian, inInts[inPos:inPos+(bktRef.NByte/4)])
 		if err != nil {
 			return nil, errors.Wrapf(err, "Couldn't read from input ref %v", i)
@@ -64,7 +68,11 @@ func localDistribWorker(inBkts []*PartRef, offset int, width int) (data.DistribA
 	}
 
 	for i := 0; i < nBucket; i++ {
-		writer := outParts[i].GetWriter()
+		writer, err := outParts[i].GetWriter()
+		if err != nil {
+			return nil, errors.Wrapf(err, "Failed to write bucket %v", i)
+		}
+
 		start := boundaries[i]
 		var end int64
 		if i == nBucket-1 {
@@ -118,8 +126,17 @@ func (self *BucketReader) Read(out []byte) (n int, err error) {
 	for ; self.partX < self.nPart; self.partX++ {
 		for ; self.arrX < self.nArr; self.arrX++ {
 			part := self.parts[self.arrX][self.partX]
-			for self.dataX < part.Len() {
-				reader := part.GetRangeReader(self.dataX, 0)
+			partLen, err := part.Len()
+			if err != nil {
+				return 0, errors.Wrapf(err, "Couldn't determine length of input %v:%v", self.arrX, self.partX)
+			}
+
+			for self.dataX < partLen {
+				reader, err := part.GetRangeReader(self.dataX, 0)
+				if err != nil {
+					return outX, errors.Wrapf(err, "Couldnt read input %v:%v", self.arrX, self.partX)
+				}
+
 				nRead, readErr := reader.Read(out[outX:])
 				reader.Close()
 
@@ -186,8 +203,13 @@ func (self *BucketRefIterator) Next(sz int64) ([]*PartRef, error) {
 	for ; self.partX < self.nPart; self.partX++ {
 		for ; self.arrX < self.nArr; self.arrX++ {
 			part := self.parts[self.arrX][self.partX]
-			for self.dataX < part.Len() {
-				nRemaining := part.Len() - self.dataX
+			partLen, err := part.Len()
+			if err != nil {
+				return nil, errors.Wrapf(err, "Couldn't determine length of input %v:%v", self.arrX, self.partX)
+			}
+
+			for self.dataX < partLen {
+				nRemaining := partLen - self.dataX
 
 				var toWrite int64
 				if nRemaining <= nNeeded {

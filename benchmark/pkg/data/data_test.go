@@ -11,9 +11,15 @@ import (
 )
 
 func checkPart(part DistribPart, expected []uint32) error {
-	partReader := part.GetReader()
+	var err error
+
+	partReader, err := part.GetReader()
+	if err != nil {
+		return err
+	}
+
 	retInts := make([]uint32, len(expected))
-	err := binary.Read(partReader, binary.LittleEndian, retInts)
+	err = binary.Read(partReader, binary.LittleEndian, retInts)
 	if err != nil {
 		return errors.Wrap(err, "Failed to read from partition")
 	}
@@ -32,7 +38,8 @@ func checkPart(part DistribPart, expected []uint32) error {
 }
 
 func writePart(t *testing.T, part DistribPart, src []byte) {
-	partWriter := part.GetWriter()
+	partWriter, err := part.GetWriter()
+	require.Nilf(t, err, "Failed to get writer: %v", err)
 
 	n, err := partWriter.Write(src)
 	require.Nilf(t, err, "Writing failed: %v", err)
@@ -44,7 +51,9 @@ func writePart(t *testing.T, part DistribPart, src []byte) {
 
 func readPart(t *testing.T, part DistribPart, dst []byte) {
 	var err error
-	partReader := part.GetReader()
+	partReader, err := part.GetReader()
+	require.Nil(t, err, "Failed to get reader for partition")
+
 	ntotal := 0
 	for ntotal < len(dst) {
 		n, err := partReader.Read(dst[ntotal:])
@@ -135,8 +144,10 @@ func testDistribArrUints(t *testing.T, arr DistribArray, npart int, partLen int)
 	}
 
 	for partIdx, part := range parts {
-		partWriter := part.GetWriter()
-		err := binary.Write(partWriter, binary.LittleEndian, rawParts[partIdx])
+		partWriter, err := part.GetWriter()
+		require.Nilf(t, err, "Failed to get writer for partition %v", partIdx)
+
+		err = binary.Write(partWriter, binary.LittleEndian, rawParts[partIdx])
 		require.Nilf(t, err, "Couldn't write to partition %v: %v", partIdx, err)
 
 		partWriter.Close()
