@@ -1,41 +1,11 @@
 package data
 
 import (
-	"encoding/binary"
-	"fmt"
 	"io"
 	"testing"
 
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
-
-func checkPart(part DistribPart, expected []uint32) error {
-	var err error
-
-	partReader, err := part.GetReader()
-	if err != nil {
-		return err
-	}
-
-	retInts := make([]uint32, len(expected))
-	err = binary.Read(partReader, binary.LittleEndian, retInts)
-	if err != nil {
-		return errors.Wrap(err, "Failed to read from partition")
-	}
-	partReader.Close()
-
-	if len(retInts) != len(expected) {
-		return fmt.Errorf("Read wrong number of values: expected %v, got %v", len(expected), len(retInts))
-	}
-
-	for i := 0; i < len(expected); i++ {
-		if retInts[i] != expected[i] {
-			return fmt.Errorf("Partition returned wrong value at %v: expected %v, got %v", i, expected[i], retInts[i])
-		}
-	}
-	return nil
-}
 
 func writePart(t *testing.T, part DistribPart, src []byte) {
 	partWriter, err := part.GetWriter()
@@ -79,92 +49,46 @@ func readPart(t *testing.T, part DistribPart, dst []byte) {
 	require.Nilf(t, err, "Failed to close partReader: %v", err)
 }
 
-// The simplest test for DistribArray writes raw bytes and uses only
-// DistribArray features (no binary decoding or anything)
-func testDistribArrBytes(t *testing.T, arr DistribArray, npart int, partLen int) {
+func generateBytes(t *testing.T, arr DistribArray, partLen int) (raw []byte) {
 	parts, err := arr.GetParts()
 	require.Nilf(t, err, "Failed to get partitions: %v", err)
 
-	rawParts := make([]([]byte), npart)
+	npart := len(parts)
+	raw = make([]byte, npart*partLen)
 	for partIdx := 0; partIdx < npart; partIdx++ {
+		globalStart := partIdx * partLen
 		t.Logf("Processing partition %v\n", partIdx)
 		part := parts[partIdx]
 
 		// Generate Inputs
-		rawParts[partIdx] = make([]byte, partLen)
 		for i := 0; i < partLen; i++ {
-			rawParts[partIdx][i] = (byte)(((partIdx * partLen) + i) % 256)
+			globalPos := globalStart + i
+			raw[globalPos] = (byte)(globalPos % 256)
 		}
 
 		// Write to partition
-		writePart(t, part, rawParts[partIdx])
-
-		// Read Back from Partition
-		retBytes := make([]byte, partLen)
-		readPart(t, part, retBytes)
-
-		// Validate
-		for i := 0; i < partLen; i++ {
-			require.Equal(t, retBytes[i], rawParts[partIdx][i],
-				"Returned bytes don't match at index %v: expected %v, got %v", i, rawParts[partIdx][i])
-		}
+		writePart(t, part, raw[globalStart:globalStart+partLen])
 	}
 
-	// Make sure we get the same parts back on subsequent calls
-	parts, err = arr.GetParts()
-	require.Nilf(t, err, "Failed to re-acquire partitions")
+	return raw
+}
+
+func checkArr(t *testing.T, arr DistribArray, ref []byte, partLen int) {
+	parts, err := arr.GetParts()
+	require.Nilf(t, err, "Failed to get partitions: %v", err)
+
+	npart := len(parts)
+
 	for partIdx := 0; partIdx < npart; partIdx++ {
-		t.Logf("Re-reading partition %v", partIdx)
-		// Read Back from Partition
+		// Re-allocate each time to zero out
 		retBytes := make([]byte, partLen)
 		readPart(t, parts[partIdx], retBytes)
 
 		// Validate
 		for i := 0; i < partLen; i++ {
-			require.Equal(t, retBytes[i], rawParts[partIdx][i],
-				"Returned bytes don't match at index %v: expected %v, got %v", i, rawParts[partIdx][i])
+			refPos := partIdx*partLen + i
+			require.Equal(t, retBytes[i], ref[refPos],
+				"Returned bytes don't match at index %v", i)
 		}
-	}
-}
-
-// Test the distributed array in a more complex test case using uint32s, this
-// is how it will be used during sorting
-func testDistribArrUints(t *testing.T, arr DistribArray, npart int, partLen int) {
-	parts, err := arr.GetParts()
-	require.Nilf(t, err, "Failed to get partitions: %v", err)
-
-	// Give each partition a unique set of data (just incrementing counter)
-	rawParts := make([][]uint32, npart)
-	for partIdx := 0; partIdx < npart; partIdx++ {
-		rawParts[partIdx] = make([]uint32, partLen)
-		// Give each partition a unique set of data (just incrementing counter)
-		for i := 0; i < partLen; i++ {
-			rawParts[partIdx][i] = (uint32)((partIdx * partLen) + i)
-		}
-	}
-
-	for partIdx, part := range parts {
-		partWriter, err := part.GetWriter()
-		require.Nilf(t, err, "Failed to get writer for partition %v", partIdx)
-
-		err = binary.Write(partWriter, binary.LittleEndian, rawParts[partIdx])
-		require.Nilf(t, err, "Couldn't write to partition %v: %v", partIdx, err)
-
-		partWriter.Close()
-	}
-
-	// Check partitions from same partition object
-	for partIdx, part := range parts {
-		err = checkPart(part, rawParts[partIdx])
-		require.Nilf(t, err, "Partition %v validation failure: %v", partIdx, err)
-	}
-
-	// Get new handle for partitions and check
-	newParts, err := arr.GetParts()
-	require.Nilf(t, err, "Failed to get partitions from array: %v", err)
-
-	for partIdx, part := range newParts {
-		err = checkPart(part, rawParts[partIdx])
-		require.Nilf(t, err, "Re-Opened Partition %v validation failure: %v", partIdx, err)
 	}
 }

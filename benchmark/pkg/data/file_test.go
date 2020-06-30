@@ -20,5 +20,19 @@ func TestFileDistribArrBytes(t *testing.T) {
 	arr, err := NewFileDistribArray(filepath.Join(tmpDir, "TestFileDistribArrBytes"), npart)
 	require.Nilf(t, err, "Failed to initialize array: %v", err)
 
-	testDistribArrBytes(t, arr, npart, partLen)
+	raw := generateBytes(t, arr, partLen)
+
+	t.Run("ReadWrite", func(t *testing.T) {
+		checkArr(t, arr, raw, partLen)
+	})
+
+	t.Run("ReRead", func(t *testing.T) {
+		checkArr(t, arr, raw, partLen)
+	})
+
+	t.Run("ReOpenArr", func(t *testing.T) {
+		arr2, err := NewFileDistribArrayExisting(filepath.Join(tmpDir, "TestFileDistribArrBytes"))
+		require.Nil(t, err, "Failed to re-open array")
+		checkArr(t, arr2, raw, partLen)
+	})
 }

@@ -74,16 +74,6 @@ func TestMemDistribPart(t *testing.T) {
 	require.Equalf(t, (byte)(42), out[0], "Read Incorrect Value")
 }
 
-func TestMemDistribArrUints(t *testing.T) {
-	npart := 2
-	partLen := 1024
-
-	arr, err := NewMemDistribArray(npart)
-	require.Nilf(t, err, "Failed to initialize array: %v", err)
-
-	testDistribArrUints(t, arr, npart, partLen)
-}
-
 func TestMemDistribArrBytes(t *testing.T) {
 	npart := 2
 	partLen := 64
@@ -91,5 +81,13 @@ func TestMemDistribArrBytes(t *testing.T) {
 	arr, err := NewMemDistribArray(npart)
 	require.Nilf(t, err, "Failed to initialize array: %v", err)
 
-	testDistribArrBytes(t, arr, npart, partLen)
+	raw := generateBytes(t, arr, partLen)
+
+	t.Run("ReadWrite", func(t *testing.T) {
+		checkArr(t, arr, raw, partLen)
+	})
+
+	t.Run("ReRead", func(t *testing.T) {
+		checkArr(t, arr, raw, partLen)
+	})
 }
