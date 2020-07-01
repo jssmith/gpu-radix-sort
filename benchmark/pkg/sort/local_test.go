@@ -10,7 +10,7 @@ import (
 func TestLocal(t *testing.T) {
 	var err error
 
-	test := RandomInputs(1024)
+	test := RandomInputs(1021)
 
 	ref := make([]uint32, len(test))
 	copy(ref, test)
@@ -59,7 +59,7 @@ func checkPartial(t *testing.T, test []uint32, boundaries []uint32, orig []uint3
 func TestLocalPartial(t *testing.T) {
 	var err error
 
-	size := 1024
+	size := 1021
 	width := 4
 	nbucket := 1 << width
 

@@ -14,7 +14,7 @@ import (
 func TestLocalDistribWorker(t *testing.T) {
 	var err error
 
-	nElem := 1024
+	nElem := 1021
 	width := 4
 	npart := 1 << width
 
@@ -302,8 +302,9 @@ func TestBucketRefIterator(t *testing.T) {
 func TestSortDistrib(t *testing.T) {
 	var err error
 
-	// nElem := 1024
-	nElem := 512
+	// Should be an odd (in both senses) number to pick up unaligned corner
+	// cases
+	nElem := 1111
 	origRaw := RandomInputs(nElem)
 
 	origArr, err := data.NewMemDistribArray(1)
@@ -319,7 +320,7 @@ func TestSortDistrib(t *testing.T) {
 	require.Nil(t, err)
 	writer.Close()
 
-	outArrs, err := SortDistrib(origArr, (int64)(nElem*4))
+	outArrs, err := SortDistrib(origArr, (int64)(nElem))
 	require.Nilf(t, err, "Sort returned an error: %v", err)
 
 	reader, err := NewBucketReader(outArrs)

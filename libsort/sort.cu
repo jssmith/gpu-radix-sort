@@ -13,13 +13,15 @@
 __global__ void gpu_groups(unsigned int* d_boundaries, unsigned int* d_in, int offset, int group_width, unsigned int d_in_len)
 {
   unsigned int th_idx = blockIdx.x * blockDim.x + threadIdx.x;
-  unsigned int prev_idx = (th_idx == 0) ? 0 : th_idx - 1;
 
-  unsigned int th_group = group_bits(d_in[th_idx], offset, group_width);
-  unsigned int prev_group = group_bits(d_in[prev_idx], offset, group_width);
+  if(th_idx < d_in_len) {
+    unsigned int prev_idx = (th_idx == 0) ? 0 : th_idx - 1;
+    unsigned int th_group = group_bits(d_in[th_idx], offset, group_width);
+    unsigned int prev_group = group_bits(d_in[prev_idx], offset, group_width);
 
-  if(th_group != prev_group) {
-    d_boundaries[th_group] = th_idx;
+    if(th_group != prev_group) {
+      d_boundaries[th_group] = th_idx;
+    }
   }
 }
 
@@ -263,7 +265,7 @@ SortState::SortState(unsigned int* in, size_t len) : data_len(len)
     block_sz = MAX_BLOCK_SZ;
     grid_sz = data_len / block_sz;
 
-    // Take advantage of the fact that integer division drops the decimals
+    //grid_sz was the floor, add an extra block if there was extra data
     if (data_len % block_sz != 0)
         grid_sz += 1;
 

@@ -5,6 +5,12 @@
 #include "../libsort/libsort.h"
 //#include "pyplover.h"
 
+#define DISTRIB_STEP_WIDTH 4
+#define DISTRIB_NBUCKET (1 << DISTRIB_STEP_WIDTH)
+#define DISTRIB_NSTEP (32 / DISTRIB_STEP_WIDTH)
+
+#define group_bits(val, pos, width) ((val >> pos) & ((1 << width) - 1));
+
 bool checkSort(unsigned int *arr, size_t len) {
     unsigned int prev = 0;
     for(size_t i = 0; i < len; i++) {
@@ -50,13 +56,61 @@ void free_input(unsigned int *in) {
     delete[] in;
 }
 
+bool testGpuPartial(uint32_t *data, size_t len)
+{
+  uint32_t *testBounds = new uint32_t[DISTRIB_NBUCKET];
+  uint32_t *radixCounts = new uint32_t[DISTRIB_NBUCKET + 1]();
+  uint32_t *refBounds = new uint32_t[DISTRIB_NBUCKET + 1]();
+
+  for(size_t i = 0; i < len; i++) {
+    int radix = group_bits(data[i], 0, DISTRIB_STEP_WIDTH);
+    radixCounts[radix]++;
+  }
+
+  uint32_t prev = 0;
+  for(int i = 0; i < DISTRIB_NBUCKET; i++) {
+    refBounds[i] = prev;
+    prev += radixCounts[i];
+  }
+  // makes checking loops simpler
+  refBounds[DISTRIB_NBUCKET] = len;
+
+  if(!gpuPartial(data, testBounds, len, 0, DISTRIB_STEP_WIDTH)) {
+    fprintf(stderr, "gpuPartial call failed\n");
+    return false;
+  }
+
+  // Make sure boundaries are correct
+  for(int i = 0; i < DISTRIB_NBUCKET; i++) {
+    if(refBounds[i] != testBounds[i]) {
+      fprintf(stderr, "Test Failure: boundary %d wrong, expected: %d, got %d\n", i,
+          refBounds[i], testBounds[i]);
+      return false;
+    }
+  }
+
+  // Make sure data was sorted right
+  uint32_t refRadix = 0;
+  for(size_t i = 0; i < len; i++) {
+    uint32_t testRadix = group_bits(data[i], 0, DISTRIB_STEP_WIDTH);
+
+    if(i == refBounds[refRadix+1]) {
+      refRadix++;
+    }
+
+    if(testRadix != refRadix) {
+      fprintf(stderr, "Test Failure: Wrong radix for data[%zu]. Expected %u, Got %u\n", i, refRadix, testRadix);
+      return false;
+    }
+  }
+    
+  return true;
+}
+
 // This simulates a distributed sort with two partitions of the array being
 // sorted independently and combined at each step. Really it's just another
 // layer of standard radix sort, but it uses libsort the same way a real
 // distributed sort would.
-#define DISTRIB_STEP_WIDTH 4
-#define DISTRIB_NBUCKET (1 << DISTRIB_STEP_WIDTH)
-#define DISTRIB_NSTEP (32 / DISTRIB_STEP_WIDTH)
 bool distribSort(uint32_t *data, size_t len)
 {
   // temporary place for shuffle outputs
@@ -113,12 +167,20 @@ bool distribSort(uint32_t *data, size_t len)
 
 int main()
 {
-    size_t nelem = 1024;
+    size_t nelem = 1021;
+    int diff;
 
     unsigned int* in = generate_input(nelem);
     unsigned int* gpuRes = new unsigned int[nelem];
     unsigned int* cpuRes = new unsigned int[nelem];
     unsigned int* distribRes = new unsigned int[nelem];
+    unsigned int* gpuPartialRes = new unsigned int[nelem];
+
+    memcpy(gpuPartialRes, in, nelem*sizeof(unsigned int));
+    if(!testGpuPartial(gpuPartialRes, nelem)) {
+        std::cerr << "GPU Partial Test Failed!\n";
+        return EXIT_FAILURE;
+    }
 
     /* printArray(in, nelem); */
     memcpy(gpuRes, in, nelem*sizeof(unsigned int));
@@ -152,7 +214,7 @@ int main()
     }
 
     //Directly compare CPU and GPU based sorts (they ought to agree)
-    int diff = cmpArrays(gpuRes, cpuRes, nelem);
+    diff = cmpArrays(gpuRes, cpuRes, nelem);
     if(diff != -1) {
       std::cerr << "CPU and GPU results disagree!";
       fprintf(stderr, "gpuRes[%d]=%u cpuRes[%d]=%u\n", diff, gpuRes[diff], diff, cpuRes[diff]);

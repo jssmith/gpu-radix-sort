@@ -3,6 +3,7 @@ package sort
 import (
 	"encoding/binary"
 	"io"
+	"math"
 
 	"github.com/nathantp/gpu-radix-sort/benchmark/pkg/data"
 	"github.com/pkg/errors"
@@ -234,9 +235,9 @@ func (self *BucketRefIterator) Next(sz int64) ([]*PartRef, error) {
 
 // Distributed sort of arr. The bytes in arr will be interpreted as uint32's
 // Returns an ordered list of distributed arrays containing the sorted output
-// (concatenate each array's partitions in order to get final result). 'size' is
-// the number of bytes in arr.
-func SortDistrib(arr data.DistribArray, size int64) ([]data.DistribArray, error) {
+// (concatenate each array's partitions in order to get final result). 'len' is
+// the number of uint32's in arr.
+func SortDistrib(arr data.DistribArray, len int64) ([]data.DistribArray, error) {
 	// Data Layout:
 	//	 - Distrib Arrays store all output from a single node
 	//	 - DistribParts represent radix sort buckets (there will be nbucket parts per DistribArray)
@@ -255,10 +256,9 @@ func SortDistrib(arr data.DistribArray, size int64) ([]data.DistribArray, error)
 	nworker := 2          //number of workers (degree of parallelism)
 	width := 4            //number of bits to sort per round
 	nstep := (32 / width) // number of steps needed to fully sort
-	// nstep := 1 // number of steps needed to fully sort
 
-	// Target number of bytes to process per worker
-	nPerWorker := (size / (int64)(nworker))
+	// Target number of uint32s to process per worker, the last worker might get less
+	maxPerWorker := (int64)(math.Ceil((float64)(len) / (float64)(nworker)))
 
 	// Initial input is the output for "step -1"
 	var outputs []data.DistribArray
@@ -273,17 +273,16 @@ func SortDistrib(arr data.DistribArray, size int64) ([]data.DistribArray, error)
 			return nil, err
 		}
 
+		// wg := sync.WaitGroup
+		// wg.Add(nworker)
+		// errChan := make(chan error)
 		for workerId := 0; workerId < nworker; workerId++ {
 			// Repartition previous output
-			workerInputs, genErr := inGen.Next(nPerWorker)
-			if genErr == io.EOF {
-				if len(workerInputs) == 0 {
-					// iterator is allowed to issue EOF either with the last
-					// data, or on the next call after all the data is read
-					break
-				}
-			} else if genErr != nil {
-				return nil, errors.Wrapf(genErr, "Couldn't generate input for step %v worker %v", step, workerId)
+			workerInputs, genErr := inGen.Next(maxPerWorker * 4)
+			if genErr == io.EOF && workerId+1 != nworker {
+				return nil, errors.New("Premature EOF from input generator")
+			} else if err != nil && err != io.EOF {
+				return nil, errors.Wrap(err, "Input generator had an error")
 			}
 
 			outputs[workerId], err = localDistribWorker(workerInputs, step*width, width)
@@ -291,9 +290,13 @@ func SortDistrib(arr data.DistribArray, size int64) ([]data.DistribArray, error)
 				return nil, errors.Wrapf(err, "Worker failure on step %v, worker %v", step, workerId)
 			}
 
-			if genErr == io.EOF {
-				break
-			}
+			// go func() {
+			// 	defer wg.Done()
+			// 	outputs[workerId], err = localDistribWorker(workerInputs, step*width, width)
+			// 	if err != nil {
+			// 		errChan <- errors.Wrapf(err, "Worker failure on step %v, worker %v", step, workerId)
+			// 	}
+			// }()
 		}
 	}
 	return outputs, nil
