@@ -291,13 +291,13 @@ func SortDistrib(arr data.DistribArray, len int64) ([]data.DistribArray, error) 
 			// 	return nil, errors.Wrapf(err, "Worker failure on step %v, worker %v", step, workerId)
 			// }
 
-			go func() {
+			go func(id int, inputs []*PartRef) {
 				defer wg.Done()
-				outputs[workerId], err = localDistribWorker(workerInputs, step*width, width)
+				outputs[id], err = localDistribWorker(inputs, step*width, width)
 				if err != nil {
-					errChan <- errors.Wrapf(err, "Worker failure on step %v, worker %v", step, workerId)
+					errChan <- errors.Wrapf(err, "Worker failure on step %v, worker %v", step, id)
 				}
-			}()
+			}(workerId, workerInputs)
 		}
 		wg.Wait()
 		select {

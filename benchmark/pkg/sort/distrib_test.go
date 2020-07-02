@@ -311,6 +311,7 @@ func TestSortDistrib(t *testing.T) {
 	// Should be an odd (in both senses) number to pick up unaligned corner
 	// cases
 	nElem := 1111
+	// nElem := (1024 * 1024) + 5
 	origRaw := RandomInputs(nElem)
 
 	origArr, err := data.NewMemDistribArray(1)
