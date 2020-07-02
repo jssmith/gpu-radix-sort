@@ -9,6 +9,21 @@ package sort
 import "C"
 import "errors"
 
+// Perform one-time initialization of libsort, this must only be called once
+// per process
+var libSortInitialized bool = false
+
+func InitLibSort() error {
+	if !libSortInitialized {
+		success, _ := C.initLibSort()
+		if !success {
+			return errors.New("Failed to initialize libsort")
+		}
+		libSortInitialized = true
+	}
+	return nil
+}
+
 // Sort in in-place using only process-local resources (no distribution or
 // external storage). Uses libsort.
 func localSort(in []uint32) error {

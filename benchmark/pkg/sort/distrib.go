@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"io"
 	"math"
+	"sync"
 
 	"github.com/nathantp/gpu-radix-sort/benchmark/pkg/data"
 	"github.com/pkg/errors"
@@ -273,9 +274,9 @@ func SortDistrib(arr data.DistribArray, len int64) ([]data.DistribArray, error) 
 			return nil, err
 		}
 
-		// wg := sync.WaitGroup
-		// wg.Add(nworker)
-		// errChan := make(chan error)
+		var wg sync.WaitGroup
+		wg.Add(nworker)
+		errChan := make(chan error, nworker)
 		for workerId := 0; workerId < nworker; workerId++ {
 			// Repartition previous output
 			workerInputs, genErr := inGen.Next(maxPerWorker * 4)
@@ -285,19 +286,26 @@ func SortDistrib(arr data.DistribArray, len int64) ([]data.DistribArray, error) 
 				return nil, errors.Wrap(err, "Input generator had an error")
 			}
 
-			outputs[workerId], err = localDistribWorker(workerInputs, step*width, width)
-			if err != nil {
-				return nil, errors.Wrapf(err, "Worker failure on step %v, worker %v", step, workerId)
-			}
+			// outputs[workerId], err = localDistribWorker(workerInputs, step*width, width)
+			// if err != nil {
+			// 	return nil, errors.Wrapf(err, "Worker failure on step %v, worker %v", step, workerId)
+			// }
 
-			// go func() {
-			// 	defer wg.Done()
-			// 	outputs[workerId], err = localDistribWorker(workerInputs, step*width, width)
-			// 	if err != nil {
-			// 		errChan <- errors.Wrapf(err, "Worker failure on step %v, worker %v", step, workerId)
-			// 	}
-			// }()
+			go func() {
+				defer wg.Done()
+				outputs[workerId], err = localDistribWorker(workerInputs, step*width, width)
+				if err != nil {
+					errChan <- errors.Wrapf(err, "Worker failure on step %v, worker %v", step, workerId)
+				}
+			}()
 		}
+		wg.Wait()
+		select {
+		case firstErr := <-errChan:
+			return nil, errors.Wrapf(firstErr, "Worker failure")
+		default:
+		}
+
 	}
 	return outputs, nil
 }

@@ -11,8 +11,62 @@
 #include <cuda_runtime_api.h>
 #include <cassert>
 #include <cmath>
+#include <mutex>
+#include <condition_variable>
 
 #define checkCudaErrors(val) check( (val), #val, __FILE__, __LINE__)
+
+class cudaReservation {
+  private:
+    int deviceID = -1;
+
+  public:
+    ~cudaReservation() {
+      this->releaseDevice();
+    }
+
+    bool reserveDevice(void);
+    bool releaseDevice(void);
+};
+
+//C++ inexplicably lacks a native semaphore (before '20) so I have to roll my
+//own here. Taken from https://stackoverflow.com/a/4793662.
+class semaphore
+{
+private:
+    std::mutex mutex_;
+    std::condition_variable condition_;
+    unsigned long count_;
+
+public:
+    semaphore(int startCount) {
+        count_ = startCount;
+        return;
+    }
+
+    void up() {
+        std::lock_guard<decltype(mutex_)> lock(mutex_);
+        ++count_;
+        condition_.notify_one();
+    }
+
+    void down() {
+        std::unique_lock<decltype(mutex_)> lock(mutex_);
+        while(!count_) // Handle spurious wake-ups.
+            condition_.wait(lock);
+        --count_;
+    }
+
+    bool try_down() {
+        std::lock_guard<decltype(mutex_)> lock(mutex_);
+        if(count_) {
+            --count_;
+            return true;
+        }
+        return false;
+    }
+};
+
 
 template<typename T>
 void check(T err, const char* const func, const char* const file, const int line) {
@@ -98,4 +152,4 @@ void checkResultsAutodesk(const T* const ref, const T* const gpu, size_t numElem
   }
 }
 
-#endif
+#endif //UTILS_H

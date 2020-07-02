@@ -18,6 +18,9 @@ func TestLocalDistribWorker(t *testing.T) {
 	width := 4
 	npart := 1 << width
 
+	err = InitLibSort()
+	require.Nil(t, err, "Failed to initialize libsort")
+
 	origRaw := RandomInputs(nElem)
 
 	origArr, err := data.NewMemDistribArray(1)
@@ -301,6 +304,9 @@ func TestBucketRefIterator(t *testing.T) {
 
 func TestSortDistrib(t *testing.T) {
 	var err error
+
+	err = InitLibSort()
+	require.Nil(t, err, "Failed to initialize libsort")
 
 	// Should be an odd (in both senses) number to pick up unaligned corner
 	// cases

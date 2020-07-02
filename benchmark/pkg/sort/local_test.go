@@ -2,13 +2,18 @@ package sort
 
 import (
 	"sort"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
 
 func TestLocal(t *testing.T) {
 	var err error
+
+	err = InitLibSort()
+	require.Nil(t, err, "Failed to initialize libsort")
 
 	test := RandomInputs(1021)
 
@@ -22,6 +27,60 @@ func TestLocal(t *testing.T) {
 	if err := CheckSort(ref, test); err != nil {
 		t.Fatalf("Sorted Wrong: %v", err)
 	}
+}
+
+func TestParallel(t *testing.T) {
+	var err error
+	nparallel := 16
+
+	err = InitLibSort()
+	require.Nil(t, err, "Failed to initialize libsort")
+
+	t.Run("Complete Sort", func(t *testing.T) {
+		var wg sync.WaitGroup
+		wg.Add(nparallel)
+		for i := 0; i < nparallel; i++ {
+			go func() {
+				TestLocal(t)
+				wg.Done()
+			}()
+		}
+
+		wgChan := make(chan struct{})
+		go func() {
+			defer close(wgChan)
+			wg.Wait()
+		}()
+
+		select {
+		case <-wgChan:
+		case <-time.After(2 * time.Second):
+			t.Fatalf("Timeout")
+		}
+	})
+
+	t.Run("Partial Sort", func(t *testing.T) {
+		var wg sync.WaitGroup
+		wg.Add(nparallel)
+		for i := 0; i < nparallel; i++ {
+			go func() {
+				defer wg.Done()
+				TestLocalPartial(t)
+			}()
+		}
+		wgChan := make(chan struct{})
+		go func() {
+			defer close(wgChan)
+			wg.Wait()
+		}()
+
+		select {
+		case <-wgChan:
+		case <-time.After(2 * time.Second):
+			t.Fatalf("Timeout")
+		}
+	})
+
 }
 
 func checkPartial(t *testing.T, test []uint32, boundaries []uint32, orig []uint32) {
@@ -58,6 +117,9 @@ func checkPartial(t *testing.T, test []uint32, boundaries []uint32, orig []uint3
 // test gpuPartial itself (we assume libsort is correct)
 func TestLocalPartial(t *testing.T) {
 	var err error
+
+	err = InitLibSort()
+	require.Nil(t, err, "Failed to initialize libsort")
 
 	size := 1021
 	width := 4

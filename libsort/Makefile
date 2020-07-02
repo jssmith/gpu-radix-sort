@@ -1,12 +1,13 @@
 # CUDA_PATH ?= "/usr/local/cuda-7.5"
 # NVCC := $(CUDA_PATH)/bin/nvcc
-PYPLOVER_DIR ?= ../../../PyPlover
+# PYPLOVER_DIR ?= ../../../PyPlover
 
 NVCC := nvcc
-NVCC_OPTS := -O3 -arch=compute_35 -Xcompiler -Wall -Xcompiler -Wextra -Xcompiler -fPIC -m64 -std=c++11
-INCLUDES := -I$(PYPLOVER_DIR)/lib/include
+# NVCC_OPTS := -O3 -arch=compute_35 -Xcompiler -Wall -Xcompiler -Wextra -Xcompiler -fPIC -m64 -std=c++11
+NVCC_OPTS := -O0 -g -arch=compute_35 -Xcompiler -Wall -Xcompiler -Wextra -Xcompiler -fPIC -m64 -std=c++14
+# INCLUDES := -I$(PYPLOVER_DIR)/lib/include
 
-libsort.so: sort.o scan.o invokers.o
+libsort.so: sort.o scan.o invokers.o utils.o
 	nvcc --shared -Xcompiler -fPIC -shared $^ -o $@
 
 %.o: %.cu

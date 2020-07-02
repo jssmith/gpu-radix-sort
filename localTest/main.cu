@@ -176,6 +176,11 @@ int main()
     unsigned int* distribRes = new unsigned int[nelem];
     unsigned int* gpuPartialRes = new unsigned int[nelem];
 
+    if(!initLibSort()) {
+      std::cerr << "Failed to initialize libsort\n";
+      return EXIT_FAILURE;
+    }
+
     memcpy(gpuPartialRes, in, nelem*sizeof(unsigned int));
     if(!testGpuPartial(gpuPartialRes, nelem)) {
         std::cerr << "GPU Partial Test Failed!\n";
