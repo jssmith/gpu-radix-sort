@@ -5,6 +5,8 @@ import (
 	"encoding/binary"
 	"io"
 	"io/ioutil"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/nathantp/gpu-radix-sort/benchmark/pkg/data"
@@ -38,7 +40,9 @@ func TestLocalDistribWorker(t *testing.T) {
 
 	PartRefs := []*PartRef{&PartRef{Arr: origArr, PartIdx: 0, Start: 0, NByte: (int64)(nElem * 4)}}
 
-	outArr, err := localDistribWorker(PartRefs, 0, width)
+	outArr, err := localDistribWorker(PartRefs, 0, width, func() (data.DistribArray, error) {
+		return data.NewMemDistribArray(1 << width)
+	})
 	require.Nil(t, err)
 
 	outParts, err := outArr.GetParts()
@@ -302,7 +306,7 @@ func TestBucketRefIterator(t *testing.T) {
 
 }
 
-func TestSortDistrib(t *testing.T) {
+func sortDistribTest(t *testing.T, arrayFactory func(name string, nbucket int) (data.DistribArray, error)) {
 	var err error
 
 	err = InitLibSort()
@@ -314,7 +318,7 @@ func TestSortDistrib(t *testing.T) {
 	// nElem := (1024 * 1024) + 5
 	origRaw := RandomInputs(nElem)
 
-	origArr, err := data.NewMemDistribArray(1)
+	origArr, err := arrayFactory("testInput", 1)
 	require.Nil(t, err)
 
 	parts, err := origArr.GetParts()
@@ -327,7 +331,7 @@ func TestSortDistrib(t *testing.T) {
 	require.Nil(t, err)
 	writer.Close()
 
-	outArrs, err := SortDistrib(origArr, (int64)(nElem))
+	outArrs, err := SortDistrib(origArr, (int64)(nElem), arrayFactory)
 	require.Nilf(t, err, "Sort returned an error: %v", err)
 
 	reader, err := NewBucketReader(outArrs)
@@ -352,4 +356,24 @@ func TestSortDistrib(t *testing.T) {
 	// sort.Slice(origRaw, func(i, j int) bool { return origRaw[i] < origRaw[j] })
 	// PrintHex(origRaw)
 	require.Nilf(t, err, "Did not sort correctly: %v", err)
+}
+
+func TestSortMemDistrib(t *testing.T) {
+	sortDistribTest(t, func(name string, nbucket int) (data.DistribArray, error) {
+		var arr data.DistribArray
+		arr, err := data.NewMemDistribArray(nbucket)
+		return arr, err
+	})
+}
+
+func TestSortFileDistrib(t *testing.T) {
+	tmpDir, err := ioutil.TempDir("", "radixSortDataTest*")
+	require.Nilf(t, err, "Couldn't create temporary test directory")
+	defer os.RemoveAll(tmpDir)
+
+	sortDistribTest(t, func(name string, nbucket int) (data.DistribArray, error) {
+		var arr data.DistribArray
+		arr, err := data.NewFileDistribArray(filepath.Join(tmpDir, name), nbucket)
+		return arr, err
+	})
 }
