@@ -25,3 +25,11 @@ type DistribPart interface {
 type DistribArray interface {
 	GetParts() ([]DistribPart, error)
 }
+
+// A reference to an input partition
+type PartRef struct {
+	Arr     DistribArray // DistribArray to read from
+	PartIdx int          // Partition to read from
+	Start   int64        // Offset to start reading
+	NByte   int64        // Number of bytes to read
+}

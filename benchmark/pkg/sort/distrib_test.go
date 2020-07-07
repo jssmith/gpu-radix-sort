@@ -38,7 +38,7 @@ func TestLocalDistribWorker(t *testing.T) {
 	require.Nil(t, err)
 	writer.Close()
 
-	PartRefs := []*PartRef{&PartRef{Arr: origArr, PartIdx: 0, Start: 0, NByte: (int64)(nElem * 4)}}
+	PartRefs := []*data.PartRef{&data.PartRef{Arr: origArr, PartIdx: 0, Start: 0, NByte: (int64)(nElem * 4)}}
 
 	outArr, err := localDistribWorker(PartRefs, 0, width, func() (data.DistribArray, error) {
 		return data.NewMemDistribArray(1 << width)
