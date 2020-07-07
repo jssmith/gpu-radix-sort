@@ -1,1 +1,2 @@
-from .pylibsort import *
+from .data import *
+from .sort import *

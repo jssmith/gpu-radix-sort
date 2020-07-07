@@ -8,6 +8,7 @@ NVCC_OPTS := -O0 -g -arch=compute_35 -Xcompiler -Wall -Xcompiler -Wextra -Xcompi
 # INCLUDES := -I$(PYPLOVER_DIR)/lib/include
 
 libsort.so: sort.o scan.o invokers.o utils.o
+	# gcc --shared -fPIC -shared $^ -o $@
 	nvcc --shared -Xcompiler -fPIC -shared $^ -o $@
 
 %.o: %.cu
