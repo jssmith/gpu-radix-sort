@@ -62,7 +62,7 @@ func localDistribWorker(inBkts []*PartRef, offset int, width int, arrayFactory f
 	// Write Outputs
 	outArr, err := arrayFactory()
 	if err != nil {
-		return nil, errors.Wrap(err, "Could not allocate outpt")
+		return nil, errors.Wrap(err, "Could not allocate output")
 	}
 
 	outParts, err := outArr.GetParts()
@@ -290,7 +290,7 @@ func SortDistrib(arr data.DistribArray, len int64, arrayFactory func(name string
 			go func(id int, inputs []*PartRef) {
 				defer wg.Done()
 				outputs[id], err = localDistribWorker(inputs, step*width, width, func() (data.DistribArray, error) {
-					return arrayFactory(fmt.Sprintf("%v", id), 1<<width)
+					return arrayFactory(fmt.Sprintf("step%v.worker%v", step, id), 1<<width)
 				})
 				if err != nil {
 					errChan <- errors.Wrapf(err, "Worker failure on step %v, worker %v", step, id)
