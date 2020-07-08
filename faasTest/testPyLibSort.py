@@ -132,6 +132,8 @@ def testPartRefReq():
     partSz = 10
 
     with tempfile.TemporaryDirectory() as tDir:
+        pylibsort.SetDistribMount(pathlib.Path(tDir))
+
         aDir = pathlib.Path(tDir) / "distribArrayTest"
         arr = pylibsort.fileDistribArray(aDir, npart=nparts)
         inBufs = fillArr(arr, partSz)
@@ -144,12 +146,12 @@ def testPartRefReq():
               }
         
         req['input'] = [
-                {"arrayPath" : aDir,
+                {"arrayName" : aDir.name,
                 "partID" : 0,
                 "start" : 0,
                 "nbyte" : 5},
 
-                {"arrayPath" : aDir,
+                {"arrayName" : aDir.name,
                  "partID" : 1,
                  "start" : 2,
                  "nbyte" : 6

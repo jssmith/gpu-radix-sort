@@ -11,7 +11,7 @@ import (
 // JSON serializable version of data.PartRef expected by the faas sorter. See
 // the faas documentation for the meaning of these fields (faasTest/README.md)
 type FaasFilePartRef struct {
-	ArrayName string `json:"arrayPath"`
+	ArrayName string `json:"arrayName"`
 	PartId    int    `json:"partID"`
 	Start     int    `json:"start"`
 	NByte     int    `json:"nbyte"`

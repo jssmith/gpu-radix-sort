@@ -3,6 +3,15 @@ import os
 import re
 import abc
 
+FileDistribArrayMount = pathlib.Path("/shared")
+
+def SetDistribMount(newRoot: pathlib.Path):
+    """Change the default mount point for File distributed arrays to newRoot.
+    It is not necessary to call this, the default is '/shared'"""
+    global FileDistribArrayMount
+    FileDistribArrayMount = newRoot
+
+
 class DistribPart(abc.ABC):
     """A single partition of a distributed array"""
     @abc.abstractmethod
@@ -114,7 +123,7 @@ class partRef():
 
 def __filePartRefFromDict(req) -> partRef:
     """Return a partRef from an entry in the 'input' field of a req"""
-    arr = fileDistribArray(req['arrayPath'], exist_ok=True)
+    arr = fileDistribArray(FileDistribArrayMount / req['arrayName'], exist_ok=True)
     return partRef(arr, partID=req['partID'], start=req['start'], nbyte=req['nbyte'])
 
 def getPartRefs(req: dict):
