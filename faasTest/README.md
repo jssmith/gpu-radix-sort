@@ -23,9 +23,9 @@ arrType:
 
 input:
 Each element of input is a partRef with the following fields:
-  - "arrayPath" - Path to the array. The interpretation of this path depends on
-    how the system was configured (e.g. where the shared filesystem was mounted
-    etc.)
+  - "arrayName" - Directory name for this FileDistributedArray. The search path
+      for this array depends on how the FaaS system was configured, but is
+      assumed to be shared between the host and the FaaS executor.
   - "partID" - The numeric ID of the partition, this will be converted into "arrayPath/p${partID}.dat"
   - "start" - The byte index to start reading the partition from.
   - "nbyte" - The number of bytes to read. May be -1 to read the remainder of the partition (from start)
