@@ -163,9 +163,27 @@ def testPartRefReq():
         checkPartRef(("FilePartRef", "part1"), refs[1], inBufs[1][2:8])
 
 
+def testSortFromBytes():
+    nbyte = 1021
+    inBuf = bytes([random.getrandbits(8) for _ in range(nbyte)])
+    inInts = pylibsort.bytesToInts(inBuf)
+
+    try:
+        respBytes = pylibsort.sortFromBytes(inBuf)
+    except Exception as e:
+        raise testException("SortFromBytes", "PyLib sort error: " + str(e))
+
+    respInts = pylibsort.bytesToInts(respBytes)
+
+    success, idx = pylibsort.checkSortFull(respInts, inInts)
+    if not success:
+        raise testException("SortFromBytes", "Test sorted wrong")
+
+
 testFileDistribPart()
 testFileDistribArray()
 testFilePartRef()
 testPartRefReq()
+testSortFromBytes()
 
 print("PASS")

@@ -20,11 +20,16 @@ type FaasFilePartRef struct {
 // Argument expected by the radix sort function in SRK. See the faas
 // documentation for the meaning of these fields (faasTest/README.md)
 type FaasArg struct {
-	Offset  int               `json:"offset"`
-	Width   int               `json:"width"`
-	ArrType string            `json:"arrType"`
-	Input   []FaasFilePartRef `json:"input"`
-	Output  string            `json:"output"`
+	Offset  int                `json:"offset"`
+	Width   int                `json:"width"`
+	ArrType string             `json:"arrType"`
+	Input   []*FaasFilePartRef `json:"input"`
+	Output  string             `json:"output"`
+}
+
+type FaasResp struct {
+	Success bool   `json:"success"`
+	Err     string `json:"err"`
 }
 
 // Convert a data.PartRef to FaasPartRef

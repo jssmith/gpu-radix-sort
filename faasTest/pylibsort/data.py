@@ -121,7 +121,7 @@ class partRef():
         part = self.arr.getPart(self.partID)
         return part.read(start=self.start, nbyte=self.nbyte)
 
-def __filePartRefFromDict(req) -> partRef:
+def __fileGetRefs(req) -> partRef:
     """Return a partRef from an entry in the 'input' field of a req"""
     arr = fileDistribArray(FileDistribArrayMount / req['arrayName'], exist_ok=True)
     return partRef(arr, partID=req['partID'], start=req['start'], nbyte=req['nbyte'])
@@ -130,6 +130,19 @@ def getPartRefs(req: dict):
     """Returns a list of partRefs from a sort request dictionary."""
 
     if req['arrType'] == "file":
-        return [__filePartRefFromDict(r) for r in req['input']]
+        return [__fileGetRefs(r) for r in req['input']]
     else:
         raise ValueError("Invalid request type: " + str(req['arrType']))
+
+def __fileGetOutputArray(req) -> fileDistribArray:
+    return fileDistribArray(FileDistribArrayMount / req['output'], npart=1, exist_ok=True)
+
+def getOutputArray(req: dict):
+    """Returns a FileDistribArray to use for the output of req"""
+
+    if req['arrType'] == "file":
+        return __fileGetOutputArray(req)
+    else:
+        raise ValueError("Invalid request type: " + str(req['arrType']))
+
+
