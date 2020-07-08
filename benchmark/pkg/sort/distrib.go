@@ -16,7 +16,7 @@ import (
 func localDistribWorker(inBkts []*data.PartRef, offset int, width int, arrayFactory func() (data.DistribArray, error)) (data.DistribArray, error) {
 	var err error
 
-	totalLen := (int64)(0)
+	totalLen := 0
 	for i := 0; i < len(inBkts); i++ {
 		totalLen += inBkts[i].NByte
 	}
@@ -24,7 +24,7 @@ func localDistribWorker(inBkts []*data.PartRef, offset int, width int, arrayFact
 
 	// Fetch data to local memory
 	var inInts = make([]uint32, nInt)
-	inPos := (int64)(0)
+	inPos := 0
 	for i := 0; i < len(inBkts); i++ {
 		bktRef := inBkts[i]
 		parts, err := bktRef.Arr.GetParts()
@@ -68,12 +68,12 @@ func localDistribWorker(inBkts []*data.PartRef, offset int, width int, arrayFact
 			return nil, errors.Wrapf(err, "Failed to write bucket %v", i)
 		}
 
-		start := boundaries[i]
-		var end int64
+		start := (int)(boundaries[i])
+		var end int
 		if i == nBucket-1 {
 			end = nInt
 		} else {
-			end = (int64)(boundaries[i+1])
+			end = (int)(boundaries[i+1])
 		}
 
 		err = binary.Write(writer, binary.LittleEndian, inInts[start:end])
@@ -91,11 +91,11 @@ func localDistribWorker(inBkts []*data.PartRef, offset int, width int, arrayFact
 type BucketReader struct {
 	arrs  []data.DistribArray
 	parts [][]data.DistribPart
-	arrX  int   // Index of next array to read from
-	partX int   // Index of next partition (bucket) to read from
-	dataX int64 // Index of next address within the partition to read from
-	nArr  int   // Number of arrays
-	nPart int   // Number of partitions (should be fixed for each array)
+	arrX  int // Index of next array to read from
+	partX int // Index of next partition (bucket) to read from
+	dataX int // Index of next address within the partition to read from
+	nArr  int // Number of arrays
+	nPart int // Number of partitions (should be fixed for each array)
 }
 
 func NewBucketReader(sources []data.DistribArray) (*BucketReader, error) {
@@ -135,7 +135,7 @@ func (self *BucketReader) Read(out []byte) (n int, err error) {
 				nRead, readErr := reader.Read(out[outX:])
 				reader.Close()
 
-				self.dataX += (int64)(nRead)
+				self.dataX += nRead
 				nNeeded -= nRead
 				outX += nRead
 
@@ -164,11 +164,11 @@ func (self *BucketReader) Read(out []byte) (n int, err error) {
 type BucketRefIterator struct {
 	arrs  []data.DistribArray
 	parts [][]data.DistribPart
-	arrX  int   // Index of next array to read from
-	partX int   // Index of next partition (bucket) to read from
-	dataX int64 // Index of next address within the partition to read from
-	nArr  int   // Number of arrays
-	nPart int   // Number of partitions (should be fixed for each array)
+	arrX  int // Index of next array to read from
+	partX int // Index of next partition (bucket) to read from
+	dataX int // Index of next address within the partition to read from
+	nArr  int // Number of arrays
+	nPart int // Number of partitions (should be fixed for each array)
 }
 
 func NewBucketRefIterator(source []data.DistribArray) (*BucketRefIterator, error) {
@@ -191,7 +191,7 @@ func NewBucketRefIterator(source []data.DistribArray) (*BucketRefIterator, error
 // Return the next group of PartReferences to cover sz bytes. If there is no
 // more data, returns io.EOF. The returned PartRefs may not contain sz bytes in
 // this case.
-func (self *BucketRefIterator) Next(sz int64) ([]*data.PartRef, error) {
+func (self *BucketRefIterator) Next(sz int) ([]*data.PartRef, error) {
 	var out []*data.PartRef
 
 	nNeeded := sz
@@ -206,7 +206,7 @@ func (self *BucketRefIterator) Next(sz int64) ([]*data.PartRef, error) {
 			for self.dataX < partLen {
 				nRemaining := partLen - self.dataX
 
-				var toWrite int64
+				var toWrite int
 				if nRemaining <= nNeeded {
 					toWrite = nRemaining
 				} else {
@@ -231,7 +231,7 @@ func (self *BucketRefIterator) Next(sz int64) ([]*data.PartRef, error) {
 // Returns an ordered list of distributed arrays containing the sorted output
 // (concatenate each array's partitions in order to get final result). 'len' is
 // the number of uint32's in arr.
-func SortDistrib(arr data.DistribArray, len int64, arrayFactory func(name string, nbucket int) (data.DistribArray, error)) ([]data.DistribArray, error) {
+func SortDistrib(arr data.DistribArray, len int, arrayFactory func(name string, nbucket int) (data.DistribArray, error)) ([]data.DistribArray, error) {
 	// Data Layout:
 	//	 - Distrib Arrays store all output from a single node
 	//	 - DistribParts represent radix sort buckets (there will be nbucket parts per DistribArray)
@@ -252,7 +252,7 @@ func SortDistrib(arr data.DistribArray, len int64, arrayFactory func(name string
 	nstep := (32 / width) // number of steps needed to fully sort
 
 	// Target number of uint32s to process per worker, the last worker might get less
-	maxPerWorker := (int64)(math.Ceil((float64)(len) / (float64)(nworker)))
+	maxPerWorker := (int)(math.Ceil((float64)(len) / (float64)(nworker)))
 
 	// Initial input is the output for "step -1"
 	var outputs []data.DistribArray

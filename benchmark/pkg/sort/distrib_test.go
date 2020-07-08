@@ -38,7 +38,7 @@ func TestLocalDistribWorker(t *testing.T) {
 	require.Nil(t, err)
 	writer.Close()
 
-	PartRefs := []*data.PartRef{&data.PartRef{Arr: origArr, PartIdx: 0, Start: 0, NByte: (int64)(nElem * 4)}}
+	PartRefs := []*data.PartRef{&data.PartRef{Arr: origArr, PartIdx: 0, Start: 0, NByte: (nElem * 4)}}
 
 	outArr, err := localDistribWorker(PartRefs, 0, width, func() (data.DistribArray, error) {
 		return data.NewMemDistribArray(1 << width)
@@ -238,15 +238,15 @@ func TestBucketRefIterator(t *testing.T) {
 		require.Nil(t, err, "Couldn't initialize generator")
 
 		for i := 0; i < npart*narr; i++ {
-			refs, err := g.Next((int64)(elemPerPart))
+			refs, err := g.Next(elemPerPart)
 			require.Nilf(t, err, "Failed to get %vth reference from generator", i)
 			require.Equal(t, 1, len(refs), "Returned too many references")
 			require.Equal(t, arrs[i%narr], refs[0].Arr, "DistribArrays returned in wrong order")
 			require.Equal(t, i/narr, refs[0].PartIdx, "Partitions returned in wrong order")
-			require.Equal(t, (int64)(0), refs[0].Start, "Reference should start from beginning")
-			require.Equal(t, (int64)(elemPerPart), refs[0].NByte, "Reference has wrong size")
+			require.Equal(t, 0, refs[0].Start, "Reference should start from beginning")
+			require.Equal(t, elemPerPart, refs[0].NByte, "Reference has wrong size")
 		}
-		refs, err := g.Next((int64)(elemPerPart))
+		refs, err := g.Next(elemPerPart)
 		require.Equal(t, io.EOF, err, "Generator did not return EOF")
 		require.Zero(t, len(refs), "Returned too much data")
 	})
@@ -263,7 +263,7 @@ func TestBucketRefIterator(t *testing.T) {
 		inX := 0
 		lastVal := (byte)(0)
 		for {
-			refs, genErr := g.Next((int64)(elemPerInput))
+			refs, genErr := g.Next(elemPerInput)
 			if genErr != io.EOF {
 				require.Nilf(t, genErr, "Error while reading input %v", inX)
 			}
@@ -331,7 +331,7 @@ func sortDistribTest(t *testing.T, arrayFactory func(name string, nbucket int) (
 	require.Nil(t, err)
 	writer.Close()
 
-	outArrs, err := SortDistrib(origArr, (int64)(nElem), arrayFactory)
+	outArrs, err := SortDistrib(origArr, nElem, arrayFactory)
 	require.Nilf(t, err, "Sort returned an error: %v", err)
 
 	reader, err := NewBucketReader(outArrs)

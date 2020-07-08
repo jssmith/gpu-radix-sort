@@ -39,7 +39,7 @@ func FetchDistribArraysStrided(arrs []data.DistribArray, npart int) ([]uint32, e
 		}
 	}
 
-	totalLen := (int64)(0)
+	totalLen := 0
 	for partX := 0; partX < npart; partX++ {
 		for arrX := 0; arrX < len(arrs); arrX++ {
 			part := parts[arrX][partX]
@@ -80,7 +80,7 @@ func FetchDistribArraysStrided(arrs []data.DistribArray, npart int) ([]uint32, e
 func FetchDistribArrays(arrs []data.DistribArray) ([]uint32, error) {
 	var outs [][]uint32
 
-	totalLen := (int64)(0)
+	totalLen := 0
 	for arrX, arr := range arrs {
 		parts, err := arr.GetParts()
 		if err != nil {

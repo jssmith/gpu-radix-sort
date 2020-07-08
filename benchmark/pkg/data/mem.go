@@ -23,13 +23,13 @@ type MemDistribPartReadCloser struct {
 	p *MemDistribPart // Reference to parent partition
 
 	// Start and limit act like slice indices (reader will return [start, limit])
-	start int64
-	limit int64
+	start int
+	limit int
 }
 
 func (self *MemDistribPartReadCloser) Read(dst []byte) (n int, err error) {
 	n = copy(dst, self.p.buf[self.start:self.limit])
-	self.start += (int64)(n)
+	self.start += n
 
 	if self.start == self.limit {
 		err = io.EOF
@@ -53,9 +53,9 @@ func NewMemDistribPart(p []byte) (*MemDistribPart, error) {
 	return &MemDistribPart{buf: p}, nil
 }
 
-func (self *MemDistribPart) GetRangeReader(start, end int64) (io.ReadCloser, error) {
+func (self *MemDistribPart) GetRangeReader(start, end int) (io.ReadCloser, error) {
 	if end <= 0 {
-		return &MemDistribPartReadCloser{p: self, start: start, limit: (int64)(len(self.buf)) + end}, nil
+		return &MemDistribPartReadCloser{p: self, start: start, limit: len(self.buf) + end}, nil
 	} else {
 		return &MemDistribPartReadCloser{p: self, start: start, limit: end}, nil
 	}
@@ -69,8 +69,8 @@ func (self *MemDistribPart) GetWriter() (io.WriteCloser, error) {
 	return &MemDistribPartWriteCloser{p: self}, nil
 }
 
-func (self *MemDistribPart) Len() (int64, error) {
-	return (int64)(len(self.buf)), nil
+func (self *MemDistribPart) Len() (int, error) {
+	return len(self.buf), nil
 }
 
 // In-memory 'distributed' array. Does not provide any persistence and cannot

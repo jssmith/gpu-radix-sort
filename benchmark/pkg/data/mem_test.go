@@ -20,7 +20,7 @@ func testMemRangeReader(t *testing.T, part *MemDistribPart, start int, stop int)
 	readLen := realStop - start
 
 	out := make([]byte, len(part.buf))
-	reader, err := part.GetRangeReader((int64)(start), (int64)(stop))
+	reader, err := part.GetRangeReader(start, stop)
 	require.Nil(t, err, "Failed to get reader")
 
 	n, err := reader.Read(out)

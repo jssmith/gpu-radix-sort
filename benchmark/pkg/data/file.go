@@ -38,16 +38,16 @@ type FileDistribPart struct {
 	partPath string
 }
 
-func (self *FileDistribPart) Len() (int64, error) {
+func (self *FileDistribPart) Len() (int, error) {
 	stat, err := os.Stat(self.partPath)
 	if err != nil {
 		return 0, err
 	}
 
-	return stat.Size(), nil
+	return (int)(stat.Size()), nil
 }
 
-func (self *FileDistribPart) GetRangeReader(start, end int64) (io.ReadCloser, error) {
+func (self *FileDistribPart) GetRangeReader(start, end int) (io.ReadCloser, error) {
 	var err error
 
 	reader := FileDistribPartRangeReader{}
@@ -64,11 +64,11 @@ func (self *FileDistribPart) GetRangeReader(start, end int64) (io.ReadCloser, er
 			return nil, err
 		}
 
-		end = stat.Size() + end
+		end = (int)(stat.Size()) + end
 	}
 
 	if start != 0 {
-		_, err = reader.file.Seek(start, 0)
+		_, err = reader.file.Seek((int64)(start), 0)
 		if err != nil {
 			reader.file.Close()
 			return nil, errors.Wrapf(err, "Could not seek to provided start: %v", start)
@@ -88,7 +88,7 @@ func (self *FileDistribPart) GetWriter() (io.WriteCloser, error) {
 }
 
 type FileDistribArray struct {
-	rootPath string
+	RootPath string
 }
 
 // Create a new FileDistribArray object from an existing on-disk array
@@ -98,7 +98,7 @@ func NewFileDistribArrayExisting(rootPath string) (*FileDistribArray, error) {
 		return nil, err
 	}
 
-	return &FileDistribArray{rootPath: rootPath}, nil
+	return &FileDistribArray{RootPath: rootPath}, nil
 }
 
 func NewFileDistribArray(rootPath string, npart int) (*FileDistribArray, error) {
@@ -129,24 +129,24 @@ func NewFileDistribArray(rootPath string, npart int) (*FileDistribArray, error) 
 		}
 	}
 
-	return &FileDistribArray{rootPath: rootPath}, nil
+	return &FileDistribArray{RootPath: rootPath}, nil
 }
 
 func (self *FileDistribArray) GetParts() ([]DistribPart, error) {
 	var parts []DistribPart
 
-	rootDir, err := os.Open(self.rootPath)
+	rootDir, err := os.Open(self.RootPath)
 	if err != nil {
-		return nil, errors.Wrapf(err, "Failed to open array root %v", self.rootPath)
+		return nil, errors.Wrapf(err, "Failed to open array root %v", self.RootPath)
 	}
 
 	partInfos, err := rootDir.Readdir(0)
 	if err != nil {
-		return nil, errors.Wrapf(err, "Failed to read array root %v", self.rootPath)
+		return nil, errors.Wrapf(err, "Failed to read array root %v", self.RootPath)
 	}
 
 	for _, info := range partInfos {
-		parts = append(parts, (DistribPart)(&FileDistribPart{partPath: filepath.Join(self.rootPath, info.Name())}))
+		parts = append(parts, (DistribPart)(&FileDistribPart{partPath: filepath.Join(self.RootPath, info.Name())}))
 	}
 
 	return parts, nil
