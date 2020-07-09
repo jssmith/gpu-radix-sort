@@ -14,11 +14,6 @@ class testException(Exception):
         return('Test "{}" Failure: {}'.format(self.tname, self.msg))
 
 
-# Returns the group ID of integer v for width group bits starting at pos
-def groupBits(v, pos, width):
-    return ((v >> pos) & ((1 << width) - 1))
-
-
 def fillPart(part, nbyte):
     """Fill a partition with nbyte random numbers, returns the bytes object
     used to fill"""
@@ -201,7 +196,7 @@ def testSortPartial():
 
     respInts = pylibsort.bytesToInts(inBuf)
 
-    respGroups = map(lambda v: groupBits(v, pos, width), respInts)
+    respGroups = map(lambda v: pylibsort.groupBits(v, pos, width), respInts)
     prevGroup = 0
     for i, g in enumerate(respGroups):
         if g != prevGroup:

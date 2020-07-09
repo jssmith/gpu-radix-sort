@@ -4,6 +4,12 @@ import sys
 
 from . import __state
 
+
+# Returns the group ID of integer v for width group bits starting at pos
+def groupBits(v, pos, width):
+    return ((v >> pos) & ((1 << width) - 1))
+
+
 def bytesToInts(barr):
     """Convert bytes to a list of python integers"""
     nInt = int(len(barr) / 4)
@@ -63,4 +69,4 @@ def sortPartial(buf: bytearray, offset, width):
     if not res:
         raise RuntimeError("Libsort had an internal error")
 
-    return boundaries
+    return list(boundaries)

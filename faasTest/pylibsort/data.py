@@ -60,7 +60,7 @@ class fileDistribPart(DistribPart):
     def read(self, start=0, nbyte=-1):
         with open(self.pPath, 'rb') as pf:
             pf.seek(start)
-            b = pf.read(nbyte)
+            b = bytearray(pf.read(nbyte))
         return b
     
 
@@ -137,7 +137,8 @@ def getPartRefs(req: dict):
         raise ValueError("Invalid request type: " + str(req['arrType']))
 
 def __fileGetOutputArray(req) -> fileDistribArray:
-    return fileDistribArray(FileDistribArrayMount / req['output'], npart=1, exist_ok=True)
+    return fileDistribArray(FileDistribArrayMount / req['output'],
+            npart=(1 << req['width']), exist_ok=True)
 
 def getOutputArray(req: dict):
     """Returns a FileDistribArray to use for the output of req"""

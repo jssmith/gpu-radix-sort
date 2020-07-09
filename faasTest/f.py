@@ -17,27 +17,36 @@ def f(event):
         os.environ['LD_LIBRARY_PATH'] = '/handler'
 
     # Temporary limitation for testing
-    if (event['offset'] != 0 or event['width'] != 32 or 
-        event['arrType'] != 'file' or len(event['input']) != 1):
+    if event['arrType'] != 'file':
         return {
                 "success" : False,
-                "err" : "Function currently only supports full sort"
+                "err" : "Function currently only supports file distributed arrays"
+                }
+
+    if len(event['input']) != 1:
+        return {
+                "success" : False,
+                "err" : "Function currently only supports a single input (no gather support yet)"
                 }
 
     ref = pylibsort.getPartRefs(event)[0]
     rawBytes = ref.read()
 
     try:
-        cSorted = pylibsort.sortFromBytes(rawBytes)
+        boundaries = pylibsort.sortPartial(rawBytes, event['offset'], event['width'])
     except Exception as e:
         return {
                 "success" : False,
                 "err" : str(e)
                }
 
+    # Convert boundaries to byte addresses and add a boundary after the last group
+    boundaries = list(map(lambda x: x*4, boundaries))
+    boundaries.append(len(rawBytes))
+
     outArr = pylibsort.getOutputArray(event)
-    part = outArr.getPart(0)
-    part.write(cSorted)
+    for i, p in enumerate(outArr.getParts()):
+        p.write(rawBytes[boundaries[i]:boundaries[i+1]])
 
     return {
             "success" : True,
@@ -46,8 +55,12 @@ def f(event):
 
 if __name__ == "__main__":
     """Main only used for testing purposes"""
-    nbyte = 1021
-    inBuf = bytes([random.getrandbits(8) for _ in range(nbyte)])
+    nElem = 1021
+    nbyte = nElem*4
+    offset = 0
+    width = 4
+
+    inBuf = bytearray([random.getrandbits(8) for _ in range(nbyte)])
     inInts = pylibsort.bytesToInts(inBuf)
 
     with tempfile.TemporaryDirectory() as tDir:
@@ -63,8 +76,8 @@ if __name__ == "__main__":
         part.write(inBuf)
 
         req = {
-                "offset" : 0,
-                "width" : 32,
+                "offset" : offset,
+                "width" : width,
                 "arrType" : "file",
                 "input" : [
                     {
@@ -83,13 +96,30 @@ if __name__ == "__main__":
             exit(1)
 
         outArr = pylibsort.fileDistribArray(tDir / outArrName, exist_ok=True)
-        outBytes = outArr.getPart(0).read()
 
-    outInts = pylibsort.bytesToInts(outBytes)
+        groupOuts = []
+        parts = outArr.getParts()
+        for p in parts:
+            groupOuts.append(p.read())
 
-    success, idx = pylibsort.checkSortFull(outInts, inInts)
-    if not success:
-        print("Test sorted wrong")
+    if len(groupOuts) != (1 << width):
+        print("FAILURE: Too few groups. Expected {}, Got {}".format(1 << width, len(groupOuts)))
+        exit(1)
+
+    retNElem = 0
+    for i, g in enumerate(groupOuts):
+        gInts = pylibsort.bytesToInts(g)
+        retNElem += len(gInts)
+
+        badGroups = filter(lambda x: pylibsort.groupBits(x, offset, width) != i, gInts)
+        firstBad = next(badGroups, None)
+        if firstBad is not None:
+            print("FAILURE: Group {} has element with groupID {}".format(
+                i, pylibsort.groupBits(firstBad, offset, width)))
+            exit(1)
+
+    if retNElem != nElem:
+        print("FAILURE: Not enough elements returned. Expected {}, Got {}".format(nElem, retNElem))
         exit(1)
 
     print("PASS")
