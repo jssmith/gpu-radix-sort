@@ -3,6 +3,8 @@ import os
 import re
 import abc
 
+from . import __state
+
 FileDistribArrayMount = pathlib.Path("/shared")
 
 def SetDistribMount(newRoot: pathlib.Path):

@@ -2,6 +2,8 @@ import ctypes
 import ctypes.util
 import sys
 
+from . import __state
+
 def bytesToInts(barr):
     """Convert bytes to a list of python integers"""
     nInt = int(len(barr) / 4)
@@ -30,28 +32,35 @@ def checkSortFull(new, orig):
     return (True, 0)
 
 
-def sortFromBytes(buf):
-    """Interpret buf (a bytearray) as an array of C uint32s and sort it"""
+def sortFull(buf: bytearray):
+    """Interpret buf as an array of C uint32s and sort it in place."""
     nElem = int(len(buf) / 4)
-    cRaw = (ctypes.c_uint8 * len(buf))(*buf)
+    cRaw = (ctypes.c_uint8 * len(buf)).from_buffer(buf)
     cInt = ctypes.cast(cRaw, ctypes.POINTER(ctypes.c_uint))
 
-    # Not sure what is wrong here, ctypes.util.find_library is the right
-    # function to call but it doesn't find libsort. The internal function
-    # here does find it. The problem is in ctypes.util._get_soname which has
-    # some error about the dynamic section when calling objdump -p -j .dynamic
-    # libsort.so. This hack works for now.
-    libsortPath = ctypes.util._findLib_ld("sort")
-    if libsortPath is None:
-        raise RuntimeError("libsort could not be located, be sure libsort.so is on your library search path (e.g. with LD_LIBRARY_PATH)")
-
-    sortLib = ctypes.cdll.LoadLibrary(libsortPath)
-
     # Sort cIn in-place
-    res = sortLib.providedGpu(cInt, ctypes.c_size_t(nElem))
+    res = __state.sortLib.providedGpu(cInt, ctypes.c_size_t(nElem))
 
     if not res:
         raise RuntimeError("Libsort had an internal error")
 
-    return cRaw
 
+def sortPartial(buf: bytearray, offset, width):
+    """Perform a partial sort of buf in place (width bits starting at bit
+    offset) and return a list of the boundaries between each radix group."""
+
+    nElem = int(len(buf) / 4)
+    cRaw = (ctypes.c_uint8 * len(buf)).from_buffer(buf)
+    cInt = ctypes.cast(cRaw, ctypes.POINTER(ctypes.c_uint32))
+
+    boundaries = (ctypes.c_uint32 * (1 << width))()
+
+    res = __state.sortLib.gpuPartial(cInt, boundaries,
+        ctypes.c_size_t(nElem),
+        ctypes.c_uint32(offset),
+        ctypes.c_uint32(width))
+
+    if not res:
+        raise RuntimeError("Libsort had an internal error")
+
+    return boundaries

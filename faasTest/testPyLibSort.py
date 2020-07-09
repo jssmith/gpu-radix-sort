@@ -13,6 +13,12 @@ class testException(Exception):
     def __str__(self):
         return('Test "{}" Failure: {}'.format(self.tname, self.msg))
 
+
+# Returns the group ID of integer v for width group bits starting at pos
+def groupBits(v, pos, width):
+    return ((v >> pos) & ((1 << width) - 1))
+
+
 def fillPart(part, nbyte):
     """Fill a partition with nbyte random numbers, returns the bytes object
     used to fill"""
@@ -163,27 +169,64 @@ def testPartRefReq():
         checkPartRef(("FilePartRef", "part1"), refs[1], inBufs[1][2:8])
 
 
-def testSortFromBytes():
+def testSortFull():
     nbyte = 1021
-    inBuf = bytes([random.getrandbits(8) for _ in range(nbyte)])
+    inBuf = bytearray([random.getrandbits(8) for _ in range(nbyte)])
     inInts = pylibsort.bytesToInts(inBuf)
 
     try:
-        respBytes = pylibsort.sortFromBytes(inBuf)
+        pylibsort.sortFull(inBuf)
     except Exception as e:
-        raise testException("SortFromBytes", "PyLib sort error: " + str(e))
+        raise testException("SortFull", "PyLib sort error: " + str(e))
 
-    respInts = pylibsort.bytesToInts(respBytes)
+    respInts = pylibsort.bytesToInts(inBuf)
 
     success, idx = pylibsort.checkSortFull(respInts, inInts)
     if not success:
-        raise testException("SortFromBytes", "Test sorted wrong")
+        raise testException("SortFull", "Test sorted wrong")
 
 
-testFileDistribPart()
-testFileDistribArray()
-testFilePartRef()
-testPartRefReq()
-testSortFromBytes()
+def testSortPartial():
+    nElem = 1021
+    nbyte = nElem*4
+    pos = 4
+    width = 4
+    inBuf = bytearray([random.getrandbits(8) for _ in range(nbyte)])
+    inInts = pylibsort.bytesToInts(inBuf)
+
+    try:
+        boundaries = pylibsort.sortPartial(inBuf, pos, width)
+    except Exception as e:
+        raise testException("SortFromBytes", "PyLib sort error") from e
+
+    respInts = pylibsort.bytesToInts(inBuf)
+
+    respGroups = map(lambda v: groupBits(v, pos, width), respInts)
+    prevGroup = 0
+    for i, g in enumerate(respGroups):
+        if g != prevGroup:
+            if g != prevGroup + 1:
+                raise testException("SortPartial",
+                        "Groups not in order. Expected {}, Got {}".format(
+                            prevGroup + 1, g))
+
+            if i != boundaries[g]:
+                raise testException("SortPartial",
+                        "Boundary {} incorrect. Expected {}, Got {}".format(
+                            g, i, boundaries[g]))
+            prevGroup = g
+
+
+try:
+    testFileDistribPart()
+    testFileDistribArray()
+    testFilePartRef()
+    testPartRefReq()
+    testSortFull()
+    testSortPartial()
+except testException as e:
+    print("TEST FAILURE")
+    print(e)
+    exit(1)
 
 print("PASS")
