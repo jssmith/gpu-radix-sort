@@ -1,6 +1,7 @@
 package data
 
 import (
+	"crypto/rand"
 	"io"
 	"testing"
 
@@ -55,16 +56,11 @@ func generateBytes(t *testing.T, arr DistribArray, partLen int) (raw []byte) {
 
 	npart := len(parts)
 	raw = make([]byte, npart*partLen)
+	rand.Read(raw)
 	for partIdx := 0; partIdx < npart; partIdx++ {
 		globalStart := partIdx * partLen
 		t.Logf("Processing partition %v\n", partIdx)
 		part := parts[partIdx]
-
-		// Generate Inputs
-		for i := 0; i < partLen; i++ {
-			globalPos := globalStart + i
-			raw[globalPos] = (byte)(globalPos % 256)
-		}
 
 		// Write to partition
 		writePart(t, part, raw[globalStart:globalStart+partLen])

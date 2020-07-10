@@ -133,8 +133,6 @@ func NewFileDistribArray(rootPath string, npart int) (*FileDistribArray, error) 
 }
 
 func (self *FileDistribArray) GetParts() ([]DistribPart, error) {
-	var parts []DistribPart
-
 	rootDir, err := os.Open(self.RootPath)
 	if err != nil {
 		return nil, errors.Wrapf(err, "Failed to open array root %v", self.RootPath)
@@ -145,8 +143,15 @@ func (self *FileDistribArray) GetParts() ([]DistribPart, error) {
 		return nil, errors.Wrapf(err, "Failed to read array root %v", self.RootPath)
 	}
 
+	parts := make([]DistribPart, len(partInfos))
 	for _, info := range partInfos {
-		parts = append(parts, (DistribPart)(&FileDistribPart{partPath: filepath.Join(self.RootPath, info.Name())}))
+		var partID int
+		n, err := fmt.Sscanf(info.Name(), "p%d.dat", &partID)
+		if err != nil || n != 1 {
+			return nil, fmt.Errorf("Couldn't parse partition file name: %v", info.Name())
+		}
+
+		parts[partID] = (DistribPart)(&FileDistribPart{partPath: filepath.Join(self.RootPath, info.Name())})
 	}
 
 	return parts, nil
