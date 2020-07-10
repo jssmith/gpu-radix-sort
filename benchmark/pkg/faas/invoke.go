@@ -19,10 +19,12 @@ func InvokeFaasSort(mgr *srkmgr.SrkManager, arg *FaasArg) error {
 		return fmt.Errorf("Failed to invoke function: %v\n", err)
 	}
 
+	respBytes := rawResp.Bytes()
+
 	var resp FaasResp
-	err = json.Unmarshal(rawResp.Bytes(), &resp)
+	err = json.Unmarshal(respBytes, &resp)
 	if err != nil {
-		return errors.Wrap(err, "Couldn't parse function response")
+		return errors.Wrapf(err, "Couldn't parse function response: %v", string(respBytes))
 	}
 
 	if !resp.Success {

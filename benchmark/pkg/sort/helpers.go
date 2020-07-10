@@ -10,6 +10,11 @@ import (
 	"github.com/pkg/errors"
 )
 
+// Isolate the radix group from v (returns the groupID)
+func GroupBits(v uint32, offset int, width int) int {
+	return (int)((v >> offset) & ((1 << width) - 1))
+}
+
 func PrintHex(a []uint32) {
 	for i, v := range a {
 		fmt.Printf("%3v: 0x%08x\n", i, v)

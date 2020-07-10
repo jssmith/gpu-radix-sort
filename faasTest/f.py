@@ -10,14 +10,15 @@ import tempfile
 import functools
 import operator
 
+# Ideally this would be set somewhere else (e.g. in AWS lambda you can put
+# it in /var) but for now this works.
+print("Checking for libsort")
+if pathlib.Path('/handler/libsort.so').exists():
+    print("Running in OpenLambda")
+    os.environ['LD_LIBRARY_PATH'] = '/handler'
 import pylibsort
 
 def f(event):
-    # Ideally this would be set somewhere else (e.g. in AWS lambda you can put
-    # it in /var) but for now this works.
-    if pathlib.Path('/handler/libsort.so').exists():
-        os.environ['LD_LIBRARY_PATH'] = '/handler'
-
     # Temporary limitation for testing
     if event['arrType'] != 'file':
         return {

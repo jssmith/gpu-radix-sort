@@ -2,6 +2,7 @@ package data
 
 import (
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"testing"
@@ -12,6 +13,8 @@ import (
 func TestFileDistribArrBytes(t *testing.T) {
 	npart := 2
 	partLen := 64
+
+	rand.Seed(0)
 
 	tmpDir, err := ioutil.TempDir("", "radixSortDataTest*")
 	require.Nilf(t, err, "Couldn't create temporary test directory")
