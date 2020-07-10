@@ -1,7 +1,6 @@
 package sort
 
 import (
-	"context"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -13,7 +12,6 @@ import (
 	"github.com/nathantp/gpu-radix-sort/benchmark/pkg/faas"
 	"github.com/pkg/errors"
 	"github.com/serverlessresearch/srk/pkg/srkmgr"
-	"golang.org/x/sync/semaphore"
 )
 
 type ArrayFactory func(name string, nbucket int) (data.DistribArray, error)
@@ -57,7 +55,6 @@ func InitFaasWorker(mgr *srkmgr.SrkManager) DistribWorker {
 			Output:  filepath.Base(fileArr.RootPath),
 		}
 
-		fmt.Printf("mgr: %v\n", mgr)
 		err = faas.InvokeFaasSort(mgr, faasArg)
 		if err != nil {
 			return nil, errors.Wrap(err, "FaaS sort failure")
@@ -313,10 +310,6 @@ func SortDistrib(arr data.DistribArray, len int,
 	var outputs []data.DistribArray
 	outputs = []data.DistribArray{arr}
 
-	//XXX testing only
-	sem := semaphore.NewWeighted(int64(1))
-	// var mux sync.Mutex
-
 	for step := 0; step < nstep; step++ {
 		inputs := outputs
 		outputs = make([]data.DistribArray, nworker)
@@ -347,16 +340,8 @@ func SortDistrib(arr data.DistribArray, len int,
 						nbucket)
 				}
 
-				if err = sem.Acquire(context.TODO(), 1); err != nil {
-					errChan <- errors.Wrapf(err, "Failed to aqcuire semaphore")
-					return
-				}
-				defer sem.Release(1)
-
-				// mux.Lock()
 				outputs[id], err = worker(inputs, step*width, width,
 					workerFactory)
-				// mux.Unlock()
 
 				if err != nil {
 					fmt.Println("Got Error")

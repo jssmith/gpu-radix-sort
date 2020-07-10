@@ -10,7 +10,7 @@ handler: f.py ../libsort/libsort.so
 	cp -r pylibsort ${HANDLER_DIR}/
 
 install: handler
-	cd ${SRK_DIR} && ./srk function create --source ${HANDLER_DIR} --function-name radixsort
+	srk function create --source ${HANDLER_DIR} --function-name radixsort
 
 clean:
 	rm -rf handler

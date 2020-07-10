@@ -12,12 +12,8 @@ func main() {
 	retcode := 0
 	defer func() { os.Exit(retcode) }()
 
-	fmt.Println("Getting SRK manager")
-	mgr := benchmark.GetMgr()
-	defer mgr.Destroy()
-
-	err = benchmark.TestFaasSortFull(mgr, 4051)
-	// err = benchmark.TestFaasSortPartial(mgr, 4051)
+	err = benchmark.TestFaasSortFull(4051)
+	// err = benchmark.TestFaasSortPartial(4051)
 	if err != nil {
 		fmt.Printf("FaaS sort test failed: %v\n", err)
 		retcode = 1
