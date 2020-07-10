@@ -7,6 +7,8 @@ import json
 import base64
 import pathlib
 import tempfile
+import functools
+import operator
 
 import pylibsort
 
@@ -23,14 +25,9 @@ def f(event):
                 "err" : "Function currently only supports file distributed arrays"
                 }
 
-    if len(event['input']) != 1:
-        return {
-                "success" : False,
-                "err" : "Function currently only supports a single input (no gather support yet)"
-                }
-
-    ref = pylibsort.getPartRefs(event)[0]
-    rawBytes = ref.read()
+    refs = pylibsort.getPartRefs(event)
+    rawBytes = functools.reduce(operator.iconcat,
+                    map(operator.methodcaller('read'), refs))
 
     try:
         boundaries = pylibsort.sortPartial(rawBytes, event['offset'], event['width'])
@@ -55,10 +52,13 @@ def f(event):
 
 if __name__ == "__main__":
     """Main only used for testing purposes"""
-    nElem = 1021
+    nElem = 4000
     nbyte = nElem*4
     offset = 0
     width = 4
+    narr = 2
+    npart = 2
+    bytesPerPart = int(nbyte / (narr * npart))
 
     inBuf = bytearray([random.getrandbits(8) for _ in range(nbyte)])
     inInts = pylibsort.bytesToInts(inBuf)
@@ -70,25 +70,30 @@ if __name__ == "__main__":
         inArrName = "faasSortTestIn"
         outArrName = "faasSortTestOut"
 
-        # Write source array
-        inArr = pylibsort.fileDistribArray(tDir / inArrName, npart=1)
-        part = inArr.getPart(0)
-        part.write(inBuf)
+        # Write source arrays
+        refs = []
+        for arrX in range(narr):
+            arrName = inArrName + str(arrX)
+            inArr = pylibsort.fileDistribArray(tDir / arrName, npart=npart)
+            for partX in range(npart):
+                start = ((arrX*npart) + partX)*bytesPerPart
+                part = inArr.getPart(partX)
+                part.write(inBuf[start:start+bytesPerPart])
 
+                refs.append({
+                    'arrayName': arrName,
+                    'partID' : partX,
+                    'start' : 0,
+                    'nbyte' : -1
+                })
+                
         req = {
                 "offset" : offset,
                 "width" : width,
                 "arrType" : "file",
-                "input" : [
-                    {
-                        'arrayName': inArrName,
-                        'partID' : 0,
-                        'start' : 0,
-                        'nbyte' : -1
-                    }
-                ],
+                "input" : refs,
                 "output" : outArrName
-            }
+        }
 
         resp = f(req)
         if not resp['success']:
