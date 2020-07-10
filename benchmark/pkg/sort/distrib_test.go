@@ -40,8 +40,8 @@ func TestLocalDistribWorker(t *testing.T) {
 
 	PartRefs := []*data.PartRef{&data.PartRef{Arr: origArr, PartIdx: 0, Start: 0, NByte: (nElem * 4)}}
 
-	outArr, err := localDistribWorker(PartRefs, 0, width, func() (data.DistribArray, error) {
-		return data.NewMemDistribArray(1 << width)
+	outArr, err := LocalDistribWorker(PartRefs, 0, width, func(name string, nbucket int) (data.DistribArray, error) {
+		return data.NewMemDistribArray(nbucket)
 	})
 	require.Nil(t, err)
 
@@ -306,7 +306,7 @@ func TestBucketRefIterator(t *testing.T) {
 
 }
 
-func sortDistribTest(t *testing.T, arrayFactory func(name string, nbucket int) (data.DistribArray, error)) {
+func sortDistribTest(t *testing.T, factory ArrayFactory, worker DistribWorker) {
 	var err error
 
 	err = InitLibSort()
@@ -318,7 +318,7 @@ func sortDistribTest(t *testing.T, arrayFactory func(name string, nbucket int) (
 	// nElem := (1024 * 1024) + 5
 	origRaw := RandomInputs(nElem)
 
-	origArr, err := arrayFactory("testInput", 1)
+	origArr, err := factory("testInput", 1)
 	require.Nil(t, err)
 
 	parts, err := origArr.GetParts()
@@ -331,7 +331,7 @@ func sortDistribTest(t *testing.T, arrayFactory func(name string, nbucket int) (
 	require.Nil(t, err)
 	writer.Close()
 
-	outArrs, err := SortDistrib(origArr, nElem, arrayFactory)
+	outArrs, err := SortDistrib(origArr, nElem, factory, worker)
 	require.Nilf(t, err, "Sort returned an error: %v", err)
 
 	reader, err := NewBucketReader(outArrs)
@@ -363,11 +363,11 @@ func TestSortMemDistrib(t *testing.T) {
 		var arr data.DistribArray
 		arr, err := data.NewMemDistribArray(nbucket)
 		return arr, err
-	})
+	}, LocalDistribWorker)
 }
 
 func TestSortFileDistrib(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "radixSortDataTest*")
+	tmpDir, err := ioutil.TempDir("", "radixSortLocalTest*")
 	require.Nilf(t, err, "Couldn't create temporary test directory")
 	defer os.RemoveAll(tmpDir)
 
@@ -375,5 +375,5 @@ func TestSortFileDistrib(t *testing.T) {
 		var arr data.DistribArray
 		arr, err := data.NewFileDistribArray(filepath.Join(tmpDir, name), nbucket)
 		return arr, err
-	})
+	}, LocalDistribWorker)
 }

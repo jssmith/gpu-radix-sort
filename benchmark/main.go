@@ -16,7 +16,8 @@ func main() {
 	mgr := benchmark.GetMgr()
 	defer mgr.Destroy()
 
-	err = benchmark.TestFaasSortPartial(mgr, 4051)
+	err = benchmark.TestFaasSortFull(mgr, 4051)
+	// err = benchmark.TestFaasSortPartial(mgr, 4051)
 	if err != nil {
 		fmt.Printf("FaaS sort test failed: %v\n", err)
 		retcode = 1

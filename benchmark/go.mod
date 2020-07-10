@@ -8,4 +8,5 @@ require (
 	github.com/serverlessresearch/srk v0.0.0-20200321035902-cc2031c5a52b
 	github.com/sirupsen/logrus v1.6.0
 	github.com/stretchr/testify v1.4.0
+	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
 )
