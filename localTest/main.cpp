@@ -1,9 +1,9 @@
 #include <stdio.h>
 #include <iostream>
 #include <ctime>
+#include <string.h>
 
 #include "../libsort/libsort.h"
-//#include "pyplover.h"
 
 #define DISTRIB_STEP_WIDTH 4
 #define DISTRIB_NBUCKET (1 << DISTRIB_STEP_WIDTH)
