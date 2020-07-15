@@ -33,3 +33,7 @@ type PartRef struct {
 	Start   int          // Offset to start reading
 	NByte   int          // Number of bytes to read
 }
+
+// A generic interface to creating new DistribArrays, users must provide their
+// own implementations of this.
+type ArrayFactory func(name string, nbucket int) (DistribArray, error)

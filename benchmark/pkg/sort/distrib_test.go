@@ -306,7 +306,7 @@ func TestBucketRefIterator(t *testing.T) {
 
 }
 
-func sortDistribTest(t *testing.T, factory ArrayFactory, worker DistribWorker) {
+func sortDistribTest(t *testing.T, factory data.ArrayFactory, worker DistribWorker) {
 	var err error
 
 	err = InitLibSort()
@@ -318,28 +318,8 @@ func sortDistribTest(t *testing.T, factory ArrayFactory, worker DistribWorker) {
 	// nElem := (1024 * 1024) + 5
 	origRaw := RandomInputs(nElem)
 
-	origArr, err := factory("testInput", 1)
-	require.Nil(t, err)
-
-	parts, err := origArr.GetParts()
-	require.Nil(t, err)
-
-	writer, err := parts[0].GetWriter()
-	require.Nilf(t, err, "Failed to get writer for partition")
-
-	err = binary.Write(writer, binary.LittleEndian, origRaw)
-	require.Nil(t, err)
-	writer.Close()
-
-	outArrs, err := SortDistrib(origArr, nElem, factory, worker)
-	require.Nilf(t, err, "Sort returned an error: %v", err)
-
-	reader, err := NewBucketReader(outArrs)
-	require.Nil(t, err, "Failed to create bucket iterator")
-
-	outRaw := make([]uint32, nElem)
-	err = binary.Read(reader, binary.LittleEndian, outRaw)
-	require.Nil(t, err, "Failed while reading output")
+	outRaw, err := SortDistribFromRaw(origRaw, factory, worker)
+	require.Nil(t, err, "Sort Error")
 
 	prev := outRaw[0]
 	for i := 0; i < nElem; i++ {
@@ -347,14 +327,7 @@ func sortDistribTest(t *testing.T, factory ArrayFactory, worker DistribWorker) {
 		prev = outRaw[i]
 	}
 
-	// sort.Slice(outRaw, func(i, j int) bool { return outRaw[i] < outRaw[j] })
 	err = CheckSort(origRaw, outRaw)
-	// fmt.Printf("output:\n")
-	// sort.Slice(outRaw, func(i, j int) bool { return outRaw[i] < outRaw[j] })
-	// PrintHex(outRaw)
-	// fmt.Printf("\n\nReference:\n")
-	// sort.Slice(origRaw, func(i, j int) bool { return origRaw[i] < origRaw[j] })
-	// PrintHex(origRaw)
 	require.Nilf(t, err, "Did not sort correctly: %v", err)
 }
 

@@ -9,15 +9,19 @@ import pathlib
 import tempfile
 import functools
 import operator
+import time
+
+# from memory_profiler import profile
+import cProfile
 
 # Ideally this would be set somewhere else (e.g. in AWS lambda you can put
 # it in /var) but for now this works.
-print("Checking for libsort")
 if pathlib.Path('/handler/libsort.so').exists():
     print("Running in OpenLambda")
     os.environ['LD_LIBRARY_PATH'] = '/handler'
 import pylibsort
 
+# @profile
 def f(event):
     # Temporary limitation for testing
     if event['arrType'] != 'file':
@@ -51,9 +55,11 @@ def f(event):
             "err" : "" 
            }
 
-if __name__ == "__main__":
+# @profile
+def main():
     """Main only used for testing purposes"""
     nElem = 4000
+    # nElem = 32*(1024*1024)
     nbyte = nElem*4
     offset = 0
     width = 4
@@ -61,8 +67,10 @@ if __name__ == "__main__":
     npart = 2
     bytesPerPart = int(nbyte / (narr * npart))
 
-    inBuf = bytearray([random.getrandbits(8) for _ in range(nbyte)])
-    inInts = pylibsort.bytesToInts(inBuf)
+    # start = time.time()
+    inBuf = bytearray(os.urandom(nbyte))
+    # print(time.time() - start)
+    # inInts = pylibsort.bytesToInts(inBuf)
 
     with tempfile.TemporaryDirectory() as tDir:
         tDir = pathlib.Path(tDir)
@@ -96,37 +104,46 @@ if __name__ == "__main__":
                 "output" : outArrName
         }
 
+        del inBuf
+        
+        # start = time.time()
         resp = f(req)
+        # print(time.time() - start)
         if not resp['success']:
             print("FAILURE: Function returned error: " + resp['err'])
             exit(1)
 
-        outArr = pylibsort.fileDistribArray(tDir / outArrName, exist_ok=True)
-
-        groupOuts = []
-        parts = outArr.getParts()
-        for p in parts:
-            groupOuts.append(p.read())
-
-    if len(groupOuts) != (1 << width):
-        print("FAILURE: Too few groups. Expected {}, Got {}".format(1 << width, len(groupOuts)))
-        exit(1)
-
-    retNElem = 0
-    for i, g in enumerate(groupOuts):
-        gInts = pylibsort.bytesToInts(g)
-        retNElem += len(gInts)
-
-        badGroups = filter(lambda x: pylibsort.groupBits(x, offset, width) != i, gInts)
-        firstBad = next(badGroups, None)
-        if firstBad is not None:
-            print("FAILURE: Group {} has element with groupID {}".format(
-                i, pylibsort.groupBits(firstBad, offset, width)))
-            exit(1)
-
-    if retNElem != nElem:
-        print("FAILURE: Not enough elements returned. Expected {}, Got {}".format(nElem, retNElem))
-        exit(1)
+    #     outArr = pylibsort.fileDistribArray(tDir / outArrName, exist_ok=True)
+    #
+    #     groupOuts = []
+    #     parts = outArr.getParts()
+    #     for p in parts:
+    #         groupOuts.append(p.read())
+    #
+    # if len(groupOuts) != (1 << width):
+    #     print("FAILURE: Too few groups. Expected {}, Got {}".format(1 << width, len(groupOuts)))
+    #     exit(1)
+    #
+    # retNElem = 0
+    # for i, g in enumerate(groupOuts):
+    #     gInts = pylibsort.bytesToInts(g)
+    #     retNElem += len(gInts)
+    #
+    #     badGroups = filter(lambda x: pylibsort.groupBits(x, offset, width) != i, gInts)
+    #     firstBad = next(badGroups, None)
+    #     if firstBad is not None:
+    #         print("FAILURE: Group {} has element with groupID {}".format(
+    #             i, pylibsort.groupBits(firstBad, offset, width)))
+    #         exit(1)
+    #
+    # if retNElem != nElem:
+    #     print("FAILURE: Not enough elements returned. Expected {}, Got {}".format(nElem, retNElem))
+    #     exit(1)
 
     print("PASS")
     exit(0)
+
+
+if __name__ == "__main__":
+    # cProfile.run('main()', sort='cumulative')
+    main()

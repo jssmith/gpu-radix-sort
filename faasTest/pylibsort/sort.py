@@ -2,6 +2,9 @@ import ctypes
 import ctypes.util
 import sys
 
+# from memory_profiler import profile
+# import cProfile
+
 from . import __state
 
 
@@ -51,6 +54,7 @@ def sortFull(buf: bytearray):
         raise RuntimeError("Libsort had an internal error")
 
 
+# @profile
 def sortPartial(buf: bytearray, offset, width):
     """Perform a partial sort of buf in place (width bits starting at bit
     offset) and return a list of the boundaries between each radix group."""

@@ -1,4 +1,3 @@
-SRK_DIR ?= $(abspath ../../srk)
 HANDLER_DIR=$(abspath ./handler/)
 
 all: handler install
