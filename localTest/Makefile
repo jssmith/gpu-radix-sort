@@ -1,11 +1,11 @@
 CC := g++
-CFLAGS := -O3 -Wall -Wextra -std=c++14
-LIBS=-L../libsort/ -lsort
+CFLAGS := -O3 -Wall -Wextra -Werror -std=c++14
+LIBS=-L../libsort/ -lsort -lpthread
 
-radix_sort: main.o
+radix_sort: main.o tests.o benchmarks.o
 	$(CC) -o $@ $^ $(CFLAGS) $(LIBS) 
 
-%.o: %.cpp
+%.o: %.cpp local.h
 	$(CC) -c $< $(CFLAGS)
 
 clean:
