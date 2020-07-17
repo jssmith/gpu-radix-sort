@@ -59,3 +59,32 @@ bool cudaReservation::reserveDevice(void) {
   fprintf(stderr, "Failed to find available device (this shouldn't happen)");
   return false;
 }
+
+// from https://en.wikipedia.org/wiki/Permuted_congruential_generator#Example_code
+// using rand() is an order of magnitude slower and doesn't generate all 32bits.
+#define rotr32(x, r) (x >> r | x << (-r & 31))
+extern "C" unsigned int* generateInput(size_t nelem)
+{
+    unsigned int* in = new unsigned int[nelem];
+
+	  static uint64_t       state      = 0x4d595df4d0f33173;
+		static uint64_t const multiplier = 6364136223846793005u;
+		static uint64_t const increment  = 1442695040888963407u;
+
+    for(size_t i = 0; i < nelem; i++) {
+		    uint64_t x = state;
+        unsigned count = (unsigned)(x >> 59);
+
+        state = x * multiplier + increment;
+        x ^= x >> 18;
+        in[i] = rotr32((uint32_t)(x >> 27), count);
+    }
+
+    return in;
+}
+
+// Free the output of generate_input
+extern "C" void freeInput(unsigned int *in)
+{
+    delete[] in;
+}
