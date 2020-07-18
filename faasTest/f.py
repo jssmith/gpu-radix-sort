@@ -11,8 +11,8 @@ import functools
 import operator
 import time
 
-# from memory_profiler import profile
-import cProfile
+from memory_profiler import profile
+# import cProfile
 
 # Ideally this would be set somewhere else (e.g. in AWS lambda you can put
 # it in /var) but for now this works.
@@ -21,7 +21,7 @@ if pathlib.Path('/handler/libsort.so').exists():
     os.environ['LD_LIBRARY_PATH'] = '/handler'
 import pylibsort
 
-# @profile
+@profile
 def f(event):
     # Temporary limitation for testing
     if event['arrType'] != 'file':
@@ -58,8 +58,8 @@ def f(event):
 # @profile
 def main():
     """Main only used for testing purposes"""
-    nElem = 4000
-    # nElem = 32*(1024*1024)
+    # nElem = 4000
+    nElem = 256*(1024*1024)
     nbyte = nElem*4
     offset = 0
     width = 4
@@ -67,10 +67,7 @@ def main():
     npart = 2
     bytesPerPart = int(nbyte / (narr * npart))
 
-    # start = time.time()
-    inBuf = bytearray(os.urandom(nbyte))
-    # print(time.time() - start)
-    # inInts = pylibsort.bytesToInts(inBuf)
+    inBuf = pylibsort.generateInputs(nElem)
 
     with tempfile.TemporaryDirectory() as tDir:
         tDir = pathlib.Path(tDir)
@@ -95,7 +92,7 @@ def main():
                     'start' : 0,
                     'nbyte' : -1
                 })
-                
+
         req = {
                 "offset" : offset,
                 "width" : width,
@@ -104,15 +101,17 @@ def main():
                 "output" : outArrName
         }
 
-        del inBuf
-        
-        # start = time.time()
+        # del inBuf
+        pylibsort.freeInputs(inBuf)
+
+        start = time.time()
         resp = f(req)
-        # print(time.time() - start)
+        print(time.time() - start)
         if not resp['success']:
             print("FAILURE: Function returned error: " + resp['err'])
             exit(1)
 
+    #     inInts = pylibsort.bytesToInts(inBuf)
     #     outArr = pylibsort.fileDistribArray(tDir / outArrName, exist_ok=True)
     #
     #     groupOuts = []
@@ -139,11 +138,22 @@ def main():
     # if retNElem != nElem:
     #     print("FAILURE: Not enough elements returned. Expected {}, Got {}".format(nElem, retNElem))
     #     exit(1)
-
+    #
     print("PASS")
-    exit(0)
+
+
+# @profile
+def testGenerate():
+    sz = 256*1024*1024
+    # sz = 1024
+    testIn = pylibsort.generateInputs(sz)
+
+    with tempfile.TemporaryFile() as f:
+        f.write(testIn[:])
 
 
 if __name__ == "__main__":
     # cProfile.run('main()', sort='cumulative')
     main()
+    # testGenerate()
+

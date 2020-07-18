@@ -2,7 +2,7 @@ import ctypes
 import ctypes.util
 import sys
 
-# from memory_profiler import profile
+from memory_profiler import profile
 # import cProfile
 
 from . import __state

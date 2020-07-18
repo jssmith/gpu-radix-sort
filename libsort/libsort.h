@@ -25,7 +25,7 @@ extern "C" bool providedGpu(unsigned int* h_in, size_t len);
 extern "C" bool providedCpu(unsigned int* in, size_t len);
 
 // Generate pseudorandom numbers quickly
-extern "C" unsigned int* generateInput(size_t nelem);
+extern "C" uint32_t* generateInput(size_t nelem);
 extern "C" void freeInput(unsigned int *in);
 
 #else

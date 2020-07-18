@@ -2,6 +2,7 @@ import pathlib
 import os
 import re
 import abc
+import ctypes
 
 from . import __state
 
@@ -149,3 +150,16 @@ def getOutputArray(req: dict):
         raise ValueError("Invalid request type: " + str(req['arrType']))
 
 
+# Generates n random integers and returns a bytearray of them
+def generateInputs(n):
+    # generateInput() actually returns uint32* but we cast it to byte* for
+    # pylibsort's purposes
+    __state.sortLib.generateInput.restype = ctypes.POINTER(ctypes.c_ubyte*(n*4))
+    cOut = __state.sortLib.generateInput(n)
+    cOut = cOut.contents
+    return memoryview(cOut)
+
+
+def freeInputs(buf):
+    cbuf = (ctypes.c_ubyte * len(buf)).from_buffer(buf)
+    __state.sortLib.freeInput(ctypes.byref(cbuf))
