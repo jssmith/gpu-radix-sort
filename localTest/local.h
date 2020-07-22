@@ -49,7 +49,6 @@ bool distribSort(uint32_t *data, size_t len);
 // Time how long it takes to generate n ints
 bool benchGenerate(size_t n);
 
-// Run a full suite of benchmarks with a workload size of nelem (data will be
-// generated).
-bool runBenches(int nelem);
+// Run a full suite of benchmarks. Results are printed to stdout.
+bool runBenches(void);
 #endif

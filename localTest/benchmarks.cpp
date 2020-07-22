@@ -6,6 +6,14 @@
 using namespace std;
 using namespace std::chrono;
 
+// The maximum number of elements that can be handled by one GPU at once
+// Our devices have 4GiB of memory and need two copies of the data so 2GB is
+// max size
+#define NMAX_PER_DEV (256*1024*1024)
+
+// Number of devices on the system
+#define NDEV 2
+
 class timer {
   public:
     void start() {
@@ -26,6 +34,19 @@ class timer {
     // Total time in microseconds
     int64_t totalTime = 0;
 };
+
+bool singleSort(uint32_t *data, size_t len)
+{
+  timer tTotal = timer();
+  tTotal.start();
+  bool ret = providedGpu(data, len);
+  tTotal.stop();
+
+  printf("Single Device Local Sort Statistics:\n");
+  printf("\tData Size:  %lfMiB\n", (double)(len * sizeof(unsigned int)) / (1024*1024));
+  printf("\tTotal Time: %jdms\n", tTotal.report());
+  return ret;
+}
 
 #define DISTRIB_STEP_WIDTH 8
 #define DISTRIB_NBUCKET (1 << DISTRIB_STEP_WIDTH)
@@ -111,7 +132,7 @@ bool distribSort(uint32_t *data, size_t len)
   int64_t shuffleMS = tShuffle.report();
 
   printf("Statistics:\n");
-  printf("\tData Size: %lfMiB\n", ((double)len) / (1024*1024));
+  printf("\tData Size: %lfMiB\n", (double)(len * sizeof(unsigned int)) / (1024*1024));
   printf("\tBits per step: %d (%d steps)\n", DISTRIB_STEP_WIDTH, DISTRIB_NSTEP);
   printf("\tTotal Time: %jdms (%lfms per step)\n", totalMS, (double)totalMS / DISTRIB_NSTEP);
   printf("\tWorker Time: %jdms (%lfms per step)\n", workerMS, (double)workerMS / DISTRIB_NSTEP);
@@ -148,16 +169,28 @@ bool benchGenerate(size_t n) {
   return true;
 }
 
-bool runBenches(int nelem)
+bool runBenches(void)
 {
   bool success;
-  unsigned int *test = generateInput(nelem);
+  uint64_t maxElem = NMAX_PER_DEV*NDEV;
+  unsigned int* orig = generateInput(maxElem);
+  unsigned int* test = new unsigned int[maxElem];
   
-  success = distribSort(test, nelem);
+  printf("Running distributed test:\n");
+  memcpy(test, orig, maxElem*4);
+  success = distribSort(test, maxElem);
   if(!success) {
     return false;
   }
 
-  freeInput(test);
+  printf("Running Local Single-Device test:\n");
+  memcpy(test, orig, NMAX_PER_DEV*sizeof(unsigned int));
+  success = singleSort(test, NMAX_PER_DEV);
+  if(!success) {
+    return false;
+  }
+
+  delete[] test;
+  freeInput(orig);
   return true;
 }
