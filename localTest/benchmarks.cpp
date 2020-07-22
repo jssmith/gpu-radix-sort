@@ -8,10 +8,6 @@ using namespace std::chrono;
 
 class timer {
   public:
-    timer(void) {
-      startTime = high_resolution_clock::now();
-    }
-
     void start() {
       startTime = high_resolution_clock::now();
     }
@@ -46,16 +42,20 @@ bool distribSort(uint32_t *data, size_t len)
   size_t p1len = len / 2;
   size_t p2len = (len / 2) + (len % 2);
   
-  // auto totalStart = high_resolution_clock::now();
   timer tTotal = timer();
+  timer tWorker = timer();
+  timer tShuffle = timer();
 
   // We zero copy between steps by switching which array we're using as 'data' and which is for shuffling.
   uint32_t *cur = data;
   uint32_t *next = tmp;
+
+  tTotal.start();
   for(int i = 0; i < DISTRIB_NSTEP; i++) {
     uint32_t *p1 = &cur[0];
     uint32_t *p2 = &cur[p1len];
 
+    tWorker.start();
     // Single threaded sort
     // if(!gpuPartial(p1, p1_bkt_bounds, p1len, i*DISTRIB_STEP_WIDTH, DISTRIB_STEP_WIDTH)) {
     //   return false;
@@ -76,8 +76,10 @@ bool distribSort(uint32_t *data, size_t len)
     if(!p1Err || !p2Err) {
       return false;
     }
+    tWorker.stop();
 
     //shuffle
+    tShuffle.start();
     size_t next_slot = 0;
     for(int bkt = 0; bkt < DISTRIB_NBUCKET; bkt++) {
       size_t p1_bkt_len, p2_bkt_len;
@@ -95,20 +97,27 @@ bool distribSort(uint32_t *data, size_t len)
       memcpy(&next[next_slot], &p2[p2_bkt_bounds[bkt]], p2_bkt_len*sizeof(uint32_t));
       next_slot += p2_bkt_len;
     }
+    tShuffle.stop();
 
     //swap inputs for zcopy rounds
     uint32_t *tmp = next;
     next = cur;
     cur = tmp;
   }
-
-  // auto totalEnd = high_resolution_clock::now();
-  //
-	// auto duration = duration_cast<microseconds>(end - start);
-
   tTotal.stop();
-	cout << "Time taken by function: "
-			 << tTotal.report() << " microseconds" << endl;
+
+  int64_t totalMS = tTotal.report();
+  int64_t workerMS = tWorker.report();
+  int64_t shuffleMS = tShuffle.report();
+
+  printf("Statistics:\n");
+  printf("\tData Size: %lfMiB\n", ((double)len) / (1024*1024));
+  printf("\tBits per step: %d (%d steps)\n", DISTRIB_STEP_WIDTH, DISTRIB_NSTEP);
+  printf("\tTotal Time: %jdms (%lfms per step)\n", totalMS, (double)totalMS / DISTRIB_NSTEP);
+  printf("\tWorker Time: %jdms (%lfms per step)\n", workerMS, (double)workerMS / DISTRIB_NSTEP);
+  printf("\tShuffle Time: %jdms (%lfms per step)\n", shuffleMS, (double)shuffleMS / DISTRIB_NSTEP);
+	// cout << "Time taken by function: "
+	// 		 << tTotal.report() << " microseconds" << endl;
 
   return true;
 }
