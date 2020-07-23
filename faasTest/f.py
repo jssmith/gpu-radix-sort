@@ -101,8 +101,7 @@ def main():
                 "output" : outArrName
         }
 
-        # del inBuf
-        pylibsort.freeInputs(inBuf)
+        del inBuf
 
         start = time.time()
         resp = f(req)
@@ -144,8 +143,8 @@ def main():
 
 # @profile
 def testGenerate():
-    sz = 256*1024*1024
-    # sz = 1024
+    # sz = 256*1024*1024
+    sz = 1024
     testIn = pylibsort.generateInputs(sz)
 
     with tempfile.TemporaryFile() as f:

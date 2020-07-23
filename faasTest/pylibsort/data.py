@@ -152,14 +152,7 @@ def getOutputArray(req: dict):
 
 # Generates n random integers and returns a bytearray of them
 def generateInputs(n):
-    # generateInput() actually returns uint32* but we cast it to byte* for
-    # pylibsort's purposes
-    __state.sortLib.generateInput.restype = ctypes.POINTER(ctypes.c_ubyte*(n*4))
-    cOut = __state.sortLib.generateInput(n)
-    cOut = cOut.contents
-    return memoryview(cOut)
-
-
-def freeInputs(buf):
-    cbuf = (ctypes.c_ubyte * len(buf)).from_buffer(buf)
-    __state.sortLib.freeInput(ctypes.byref(cbuf))
+    b = bytearray(n*4)
+    cInts = (ctypes.c_uint32*n).from_buffer(b)
+    __state.sortLib.populateInput(cInts, n)
+    return b

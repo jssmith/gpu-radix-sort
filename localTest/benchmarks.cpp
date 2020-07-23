@@ -48,8 +48,8 @@ bool singleSort(uint32_t *data, size_t len)
   return ret;
 }
 
-// #define DISTRIB_STEP_WIDTH 8
-#define DISTRIB_STEP_WIDTH 16
+#define DISTRIB_STEP_WIDTH 8
+// #define DISTRIB_STEP_WIDTH 16
 #define DISTRIB_NBUCKET (1 << DISTRIB_STEP_WIDTH)
 #define DISTRIB_NSTEP (32 / DISTRIB_STEP_WIDTH)
 bool distribSort(uint32_t *data, size_t len)
@@ -148,7 +148,8 @@ bool distribSort(uint32_t *data, size_t len)
 // Time how long it takes to generate n ints
 bool benchGenerate(size_t n) {
   timer tGen = timer();
-  unsigned int *test = generateInput(n);
+  unsigned int *test = new unsigned int[n];
+  populateInput(test, n);
   tGen.stop();
 	cout << "Time taken to generate " << n << " ints: "
 			 << tGen.report() << " microseconds" << endl;
@@ -166,7 +167,7 @@ bool benchGenerate(size_t n) {
   cout << "Min: " << min << "\n";
   cout << "Max: " << max << "\n";
 
-  freeInput(test); 
+  delete[] test;
   return true;
 }
 
@@ -174,7 +175,9 @@ bool runBenches(void)
 {
   bool success;
   uint64_t maxElem = NMAX_PER_DEV*NDEV;
-  unsigned int* orig = generateInput(maxElem);
+  unsigned int* orig = new unsigned int[maxElem];
+  populateInput(orig, maxElem);
+
   unsigned int* test = new unsigned int[maxElem];
   
   // printf("Running distributed test:\n");
@@ -192,6 +195,6 @@ bool runBenches(void)
   }
 
   delete[] test;
-  freeInput(orig);
+  delete[] orig;
   return true;
 }

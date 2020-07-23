@@ -77,19 +77,3 @@ extern "C" void populateInput(uint32_t *arr, size_t nelem) {
         arr[i] = rotr32((uint32_t)(x >> 27), count);
     }
 }
-
-/* extern "C" void generateInput(uint32_t *buf, size_t nelem) */
-extern "C" uint32_t* generateInput(size_t nelem)
-{
-    unsigned int* buf = new unsigned int[nelem];
-
-    populateInput(buf, nelem);
-
-    return buf;
-}
-
-// Free the output of generate_input
-extern "C" void freeInput(unsigned int *in)
-{
-    delete[] in;
-}

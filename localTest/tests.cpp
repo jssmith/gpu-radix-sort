@@ -90,7 +90,8 @@ bool runTests(int nelem)
 {
     int diff;
 
-    unsigned int* in = generateInput(nelem);
+    unsigned int* in = new unsigned int[nelem];
+    populateInput(in, nelem);
     unsigned int* gpuRes = new unsigned int[nelem];
     unsigned int* cpuRes = new unsigned int[nelem];
     unsigned int* distribRes = new unsigned int[nelem];
@@ -155,7 +156,7 @@ bool runTests(int nelem)
     delete[] gpuRes;
     delete[] cpuRes;
     delete[] distribRes;
-    freeInput(in);
+    delete[] in;
 
     return true;
 }
