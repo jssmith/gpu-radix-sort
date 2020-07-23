@@ -9,16 +9,22 @@ import (
 
 func main() {
 	var err error
-	retcode := 0
-	defer func() { os.Exit(retcode) }()
 
-	err = benchmark.TestFaasSortFull(4051)
-	// err = benchmark.TestFaasSortPartial(4051)
+	// err = benchmark.TestFaasSortFull(4051)
+	// // err = benchmark.TestFaasSortPartial(4051)
+	// if err != nil {
+	// 	fmt.Printf("FaaS sort test failed: %v\n", err)
+	// 	retcode = 1
+	// 	return
+	// }
+
+	stats, err := benchmark.RunBenchmarks()
 	if err != nil {
-		fmt.Printf("FaaS sort test failed: %v\n", err)
-		retcode = 1
-		return
+		fmt.Println("Benchmark failed: %v\n", err)
+		os.Exit(1)
 	}
+
+	stats["FileLocalDistrib"].Report(os.Stdout)
 
 	fmt.Println("Success!")
 	return
