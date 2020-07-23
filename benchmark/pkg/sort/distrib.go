@@ -96,7 +96,7 @@ func LocalDistribWorker(inBkts []*data.PartRef, offset int, width int, factory d
 	// Actual Sort
 	nBucket := 1 << width
 	boundaries := make([]uint32, nBucket)
-	if err := localSortPartial(inInts, boundaries, offset, width); err != nil {
+	if err := GpuPartial(inInts, boundaries, offset, width); err != nil {
 		return nil, errors.Wrap(err, "Local sort failed")
 	}
 

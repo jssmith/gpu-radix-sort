@@ -23,7 +23,8 @@ func TestLocalDistribWorker(t *testing.T) {
 	err = InitLibSort()
 	require.Nil(t, err, "Failed to initialize libsort")
 
-	origRaw := RandomInputs(nElem)
+	origRaw, err := GenerateInputs((uint64)(nElem))
+	require.Nil(t, err, "Failed to generate test inputs")
 
 	origArr, err := data.NewMemDistribArray(1)
 	require.Nil(t, err)
@@ -83,7 +84,8 @@ func TestFetchDistribArrays(t *testing.T) {
 	npart := 2
 	partSz := sz / (narr * npart)
 	arrSz := npart * partSz
-	rawIn := RandomInputs(sz)
+	rawIn, err := GenerateInputs((uint64)(sz))
+	require.Nil(t, err, "Failed to generate test inputs")
 
 	arrs := make([]data.DistribArray, narr)
 	for arrX := 0; arrX < narr; arrX++ {
@@ -316,7 +318,8 @@ func sortDistribTest(t *testing.T, factory data.ArrayFactory, worker DistribWork
 	// cases
 	nElem := 1111
 	// nElem := (1024 * 1024) + 5
-	origRaw := RandomInputs(nElem)
+	origRaw, err := GenerateInputs((uint64)(nElem))
+	require.Nil(t, err, "Failed to generate test inputs")
 
 	outRaw, err := SortDistribFromRaw(origRaw, factory, worker)
 	require.Nil(t, err, "Sort Error")

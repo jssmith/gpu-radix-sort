@@ -22,7 +22,10 @@ func BenchmarkFileDistribLocal(b *testing.B) {
 	// cases
 	nElem := 1111
 	// nElem := (1024 * 1024) + 5
-	origRaw := sort.RandomInputs(nElem)
+	origRaw, err := sort.GenerateInputs((uint64)(nElem))
+	if err != nil {
+		b.Fatalf("Failed to generate inputs: %v", err)
+	}
 
 	iterIn := make([]uint32, nElem)
 	b.ResetTimer()

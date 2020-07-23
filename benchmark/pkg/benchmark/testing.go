@@ -126,7 +126,10 @@ func TestFaasSortPartial(nelem int) error {
 	width := 4
 	ngroup := (1 << width)
 
-	origRaw := sort.RandomInputs(nelem)
+	origRaw, err := sort.GenerateInputs((uint64)(nelem))
+	if err != nil {
+		return errors.Wrap(err, "Couldn't create inputs")
+	}
 
 	tmpDir, err := ioutil.TempDir("", "radixSortPartialFaasTest")
 	if err != nil {
@@ -178,7 +181,10 @@ func TestFaasSortPartial(nelem int) error {
 }
 
 func TestFaasSortFull(nelem int) error {
-	origRaw := sort.RandomInputs(nelem)
+	origRaw, err := sort.GenerateInputs((uint64)(nelem))
+	if err != nil {
+		return errors.Wrap(err, "Failed to generate inputs")
+	}
 
 	tmpDir, err := ioutil.TempDir("", "radixSortFullFaasTest")
 	if err != nil {

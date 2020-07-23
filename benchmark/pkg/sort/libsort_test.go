@@ -1,6 +1,7 @@
 package sort
 
 import (
+	"math"
 	"sort"
 	"sync"
 	"testing"
@@ -15,12 +16,13 @@ func TestLocal(t *testing.T) {
 	err = InitLibSort()
 	require.Nil(t, err, "Failed to initialize libsort")
 
-	test := RandomInputs(1021)
+	test, err := GenerateInputs((uint64)(1021))
+	require.Nil(t, err, "Failed to generate inputs")
 
 	ref := make([]uint32, len(test))
 	copy(ref, test)
 
-	if err = localSort(test); err != nil {
+	if err = GpuFull(test); err != nil {
 		t.Fatalf("Error while sorting: %v", err)
 	}
 
@@ -125,15 +127,52 @@ func TestLocalPartial(t *testing.T) {
 	width := 4
 	nbucket := 1 << width
 
-	test := RandomInputs(size)
+	test, err := GenerateInputs((uint64)(size))
+	require.Nil(t, err, "Failed to generate test inputs")
+
 	boundaries := make([]uint32, nbucket)
 
 	ref := make([]uint32, len(test))
 	copy(ref, test)
 
-	if err = localSortPartial(test, boundaries, 0, width); err != nil {
+	if err = GpuPartial(test, boundaries, 0, width); err != nil {
 		t.Fatalf("Error while sorting: %v", err)
 	}
 
 	checkPartial(t, test, boundaries, ref)
+}
+
+func TestGenerate(t *testing.T) {
+	// This has to big enough for the law of large numbers to kick in
+	tdat, err := GenerateInputs((uint64)(1024 * 1024))
+	require.Nil(t, err, "Failed to generate inputs")
+
+	min := (uint32)(math.MaxUint32)
+	max := (uint32)(0)
+	sum := (uint64)(0)
+	for _, v := range tdat {
+		if v < min {
+			min = v
+		}
+		if v > max {
+			max = v
+		}
+
+		sum += (uint64)(v)
+	}
+
+	q25 := (uint64)(math.MaxUint32 / 4)
+	q75 := (uint64)(3 * (math.MaxUint32 / 4))
+
+	// These checks are super forgiving, we just want to make sure nothing
+	// stupid happened
+	mean := sum / (uint64)(len(tdat))
+	t.Logf("Mean is: %v", mean)
+	require.Greater(t, mean, q25)
+	require.Less(t, mean, q75)
+
+	t.Logf("Min is: %v", min)
+	t.Logf("Max is: %v", max)
+	require.Less(t, (uint64)(min), q25)
+	require.Greater(t, (uint64)(max), q75)
 }

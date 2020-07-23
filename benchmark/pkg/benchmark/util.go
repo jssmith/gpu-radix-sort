@@ -9,6 +9,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// Specific to agpu1 machine, edit for your environment
+const nmax_per_dev = (256 * 1024 * 1024)
+const ndev = 2
+
 // Generic invoker function for tests
 type invokerFunc func(*srkmgr.SrkManager) (*bytes.Buffer, error)
 

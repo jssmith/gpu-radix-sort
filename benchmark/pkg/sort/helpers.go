@@ -3,7 +3,6 @@ package sort
 import (
 	"encoding/binary"
 	"fmt"
-	"math/rand"
 	"sort"
 
 	"github.com/nathantp/gpu-radix-sort/benchmark/pkg/data"
@@ -19,15 +18,6 @@ func PrintHex(a []uint32) {
 	for i, v := range a {
 		fmt.Printf("%3v: 0x%08x\n", i, v)
 	}
-}
-
-func RandomInputs(len int) []uint32 {
-	rand.Seed(0)
-	out := make([]uint32, len)
-	for i := 0; i < len; i++ {
-		out[i] = rand.Uint32()
-	}
-	return out
 }
 
 // Coalesce the data in arrs into a single slice. Data will be read strided by
