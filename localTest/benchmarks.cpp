@@ -48,7 +48,8 @@ bool singleSort(uint32_t *data, size_t len)
   return ret;
 }
 
-#define DISTRIB_STEP_WIDTH 8
+// #define DISTRIB_STEP_WIDTH 8
+#define DISTRIB_STEP_WIDTH 16
 #define DISTRIB_NBUCKET (1 << DISTRIB_STEP_WIDTH)
 #define DISTRIB_NSTEP (32 / DISTRIB_STEP_WIDTH)
 bool distribSort(uint32_t *data, size_t len)
@@ -176,12 +177,12 @@ bool runBenches(void)
   unsigned int* orig = generateInput(maxElem);
   unsigned int* test = new unsigned int[maxElem];
   
-  printf("Running distributed test:\n");
-  memcpy(test, orig, maxElem*4);
-  success = distribSort(test, maxElem);
-  if(!success) {
-    return false;
-  }
+  // printf("Running distributed test:\n");
+  // memcpy(test, orig, maxElem*4);
+  // success = distribSort(test, maxElem);
+  // if(!success) {
+  //   return false;
+  // }
 
   printf("Running Local Single-Device test:\n");
   memcpy(test, orig, NMAX_PER_DEV*sizeof(unsigned int));
