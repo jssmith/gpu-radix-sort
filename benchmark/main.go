@@ -24,7 +24,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	stats["FileLocalDistrib"].Report(os.Stdout)
+	for testName, testStats := range stats {
+		fmt.Printf("%v\n", testName)
+		benchmark.ReportStats(testStats, os.Stdout)
+	}
 
 	fmt.Println("Success!")
 	return

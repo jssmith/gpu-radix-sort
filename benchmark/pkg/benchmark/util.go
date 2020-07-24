@@ -49,19 +49,14 @@ func (self *PerfTimer) Update(new *PerfTimer) {
 
 // Collects statistics about a sort. Not all fields are applicable (or
 // measurable) for all sort types.
-type SortStats struct {
-	TTotal   PerfTimer
-	TWorker  PerfTimer
-	TShuffle PerfTimer
-	TRead    PerfTimer
-	TWrite   PerfTimer
-}
+type SortStats map[string]*PerfTimer
 
-func (self *SortStats) Report(writer io.Writer) {
-	mean, stdev := stat.MeanStdDev(self.TTotal.Vals, nil)
-	fmt.Fprintf(writer, "TTotal (mean):\t%v\n", mean)
-	fmt.Fprintf(writer, "TTotal (std):\t%v\n", stdev)
-	// fmt.Fprintf(writer, "TTotal (std):\t%v\n", stats.StdDev(self.TTotal.Vals))
+func ReportStats(stats SortStats, writer io.Writer) {
+	for name, timer := range stats {
+		mean, stdev := stat.MeanStdDev(timer.Vals, nil)
+		fmt.Fprintf(writer, "%v (mean):\t%v\n", name, mean)
+		fmt.Fprintf(writer, "%v (std):\t%v\n", name, stdev)
+	}
 }
 
 // Creates a new srk manager (interface to SRK). Be sure to call mgr.Destroy()
