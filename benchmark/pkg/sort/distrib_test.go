@@ -2,7 +2,6 @@ package sort
 
 import (
 	"bytes"
-	"encoding/binary"
 	"io"
 	"io/ioutil"
 	"os"
@@ -17,6 +16,7 @@ func TestLocalDistribWorker(t *testing.T) {
 	var err error
 
 	nElem := 1021
+	nByte := nElem * 4
 	width := 4
 	npart := 1 << width
 
@@ -35,11 +35,13 @@ func TestLocalDistribWorker(t *testing.T) {
 	writer, err := parts[0].GetWriter()
 	require.Nil(t, err, "Failed to get writer")
 
-	err = binary.Write(writer, binary.LittleEndian, origRaw)
+	n, err := writer.Write(origRaw)
 	require.Nil(t, err)
+	require.Equal(t, n, nByte)
 	writer.Close()
 
-	PartRefs := []*data.PartRef{&data.PartRef{Arr: origArr, PartIdx: 0, Start: 0, NByte: (nElem * 4)}}
+	PartRefs := []*data.PartRef{&data.PartRef{Arr: origArr, PartIdx: 0, Start: 0, NByte: (nElem / 2) * 4},
+		&data.PartRef{Arr: origArr, PartIdx: 0, Start: (nElem / 2) * 4, NByte: (nElem - (nElem / 2)) * 4}}
 
 	outArr, err := LocalDistribWorker(PartRefs, 0, width, func(name string, nbucket int) (data.DistribArray, error) {
 		return data.NewMemDistribArray(nbucket)
@@ -50,70 +52,33 @@ func TestLocalDistribWorker(t *testing.T) {
 	require.Nil(t, err)
 	require.Equal(t, npart, len(outParts), "Did not return the right number of output partitions")
 
-	outRaw := make([]uint32, nElem)
-	boundaries := make([]uint32, npart)
+	outRaw := make([]byte, nByte)
+	boundaries := make([]uint64, npart)
 	totalLen := 0
+
 	for i, p := range outParts {
 		partLen, err := p.Len()
 		require.Nilf(t, err, "Failed to determine length of output partition %v", i)
 
-		bucketLen := (int)(partLen / 4)
+		boundaries[i] = (uint64)(totalLen)
 
-		boundaries[i] = (uint32)(totalLen)
-
-		totalLen += bucketLen
-		require.LessOrEqual(t, totalLen, nElem, "Too much data returned")
+		totalLen += partLen
+		require.LessOrEqual(t, totalLen, nByte, "Too much data returned")
 
 		reader, err := p.GetReader()
 		require.Nilf(t, err, "Failed to get reader for output partition %v", i)
 
-		err = binary.Read(reader, binary.LittleEndian, outRaw[boundaries[i]:totalLen])
-		require.Nilf(t, err, "Failed to read bucket %v", i)
+		n, err = reader.Read(outRaw[boundaries[i]:totalLen])
+		require.Equal(t, partLen, n, "Reader didn't return enough data")
+		if err != io.EOF && err != nil {
+			t.Fatalf("Error when reading output partition: %v", err)
+		}
+
 		reader.Close()
 	}
-
-	require.Equal(t, nElem, totalLen, "Output buckets have the wrong number of elements")
+	require.Equal(t, nByte, totalLen, "Output buckets have the wrong number of elements")
 
 	checkPartial(t, outRaw, boundaries, origRaw)
-}
-
-func TestFetchDistribArrays(t *testing.T) {
-	var err error
-	sz := 64
-	narr := 2
-	npart := 2
-	partSz := sz / (narr * npart)
-	arrSz := npart * partSz
-	rawIn, err := GenerateInputs((uint64)(sz))
-	require.Nil(t, err, "Failed to generate test inputs")
-
-	arrs := make([]data.DistribArray, narr)
-	for arrX := 0; arrX < narr; arrX++ {
-		arrs[arrX], err = data.NewMemDistribArray(npart)
-		require.Nilf(t, err, "Failed to build array %v", arrX)
-
-		parts, err := arrs[arrX].GetParts()
-		require.Nilf(t, err, "Failed to get parts from array %v", arrX)
-
-		for partX := 0; partX < npart; partX++ {
-			startIdx := (arrX * arrSz) + (partX * partSz)
-
-			writer, err := parts[partX].GetWriter()
-			require.Nilf(t, err, "Failed to get writer for partition %v", partX)
-
-			err = binary.Write(writer, binary.LittleEndian, rawIn[startIdx:startIdx+partSz])
-			require.Nil(t, err, "Failed to write initial data")
-			writer.Close()
-		}
-	}
-
-	out, err := FetchDistribArrays(arrs)
-	require.Nil(t, err, "Fetching distrib arrays returned an error")
-	require.Equal(t, len(rawIn), len(out), "Output has wrong number of elements")
-
-	for i := 0; i < sz; i++ {
-		require.Equalf(t, rawIn[i], out[i], "Output has wrong value at index %v", i)
-	}
 }
 
 // Generates a list of narr arrays with npart partitions each, with elemPerPart
@@ -150,7 +115,7 @@ func generateArrs(t *testing.T, narr, npart, elemPerPart int) []data.DistribArra
 	return arrs
 }
 
-func TestBucketReader(t *testing.T) {
+func testBucketReader(t *testing.T, order ReadOrder) {
 	narr := 2
 	npart := 2
 	elemPerPart := 256
@@ -158,25 +123,44 @@ func TestBucketReader(t *testing.T) {
 
 	// Given the global 'index' of 'value' taken from an array list returned by
 	// generateArrs, ensures that the value is correct for that index.
-	checker := func(t *testing.T, index int, value byte) {
-		outArrId := (int)(value & 0xf)
-		outPartId := (int)(value >> 4)
+	var checker func(*testing.T, int, byte)
+	if order == STRIDED {
+		checker = func(t *testing.T, index int, value byte) {
+			outArrId := (int)(value & 0xf)
+			outPartId := (int)(value >> 4)
 
-		globalPart := index / elemPerPart
-		expectPartId := globalPart / narr
-		expectArrId := globalPart % npart
+			globalPart := index / elemPerPart
+			expectPartId := globalPart / narr
+			expectArrId := globalPart % npart
 
-		// t.Logf("Checking %v: 0x%04v", index, value)
-		// t.Logf("Expecting %v:%v", expectArrId, expectPartId)
-		// t.Logf("Got %v:%v", outArrId, outPartId)
+			// t.Logf("Checking %v: 0x%04v", index, value)
+			// t.Logf("Expecting %v:%v", expectArrId, expectPartId)
+			// t.Logf("Got %v:%v", outArrId, outPartId)
 
-		require.Equal(t, expectPartId, outPartId, "Partitions out of order")
-		require.Equal(t, expectArrId, outArrId, "Arrays out of order")
+			require.Equal(t, expectPartId, outPartId, "Partitions out of order")
+			require.Equal(t, expectArrId, outArrId, "Arrays out of order")
+		}
+	} else {
+		checker = func(t *testing.T, index int, value byte) {
+			outArrId := (int)(value & 0xf)
+			outPartId := (int)(value >> 4)
+
+			globalPart := index / elemPerPart
+			expectPartId := globalPart % narr
+			expectArrId := globalPart / npart
+
+			// t.Logf("Checking %v: 0x%04v", index, value)
+			// t.Logf("Expecting %v:%v", expectArrId, expectPartId)
+			// t.Logf("Got %v:%v", outArrId, outPartId)
+
+			require.Equal(t, expectPartId, outPartId, "Partitions out of order")
+			require.Equal(t, expectArrId, outArrId, "Arrays out of order")
+		}
 	}
 	arrs := generateArrs(t, narr, npart, elemPerPart)
 
 	t.Run("All", func(t *testing.T) {
-		iter, err := NewBucketReader(arrs)
+		iter, err := NewBucketReader(arrs, order)
 
 		out, err := ioutil.ReadAll(iter)
 		require.Nil(t, err, "Failed to read from iterator")
@@ -188,7 +172,7 @@ func TestBucketReader(t *testing.T) {
 	})
 
 	t.Run("Unaligned", func(t *testing.T) {
-		iter, err := NewBucketReader(arrs)
+		iter, err := NewBucketReader(arrs, order)
 		require.Nil(t, err, "Failed to create BucketReader")
 
 		// Read almost 1 partition per read, but not exact to prevent reads
@@ -225,9 +209,20 @@ func TestBucketReader(t *testing.T) {
 			}
 		}
 	})
+
 }
 
-func TestBucketRefIterator(t *testing.T) {
+func TestBucketReaderStrided(t *testing.T) {
+	testBucketReader(t, STRIDED)
+}
+
+func TestBucketReaderInOrder(t *testing.T) {
+	testBucketReader(t, INORDER)
+}
+
+// We only test STRIDED access for reading ref's because the traversal logic is
+// shared with the Read() interface and we already test that there
+func TestBucketReaderRef(t *testing.T) {
 	narr := 2
 	npart := 2
 	elemPerPart := 256
@@ -236,11 +231,11 @@ func TestBucketRefIterator(t *testing.T) {
 	arrs := generateArrs(t, narr, npart, elemPerPart)
 
 	t.Run("Aligned", func(t *testing.T) {
-		g, err := NewBucketRefIterator(arrs)
+		g, err := NewBucketReader(arrs, STRIDED)
 		require.Nil(t, err, "Couldn't initialize generator")
 
 		for i := 0; i < npart*narr; i++ {
-			refs, err := g.Next(elemPerPart)
+			refs, err := g.ReadRef(elemPerPart)
 			require.Nilf(t, err, "Failed to get %vth reference from generator", i)
 			require.Equal(t, 1, len(refs), "Returned too many references")
 			require.Equal(t, arrs[i%narr], refs[0].Arr, "DistribArrays returned in wrong order")
@@ -248,7 +243,7 @@ func TestBucketRefIterator(t *testing.T) {
 			require.Equal(t, 0, refs[0].Start, "Reference should start from beginning")
 			require.Equal(t, elemPerPart, refs[0].NByte, "Reference has wrong size")
 		}
-		refs, err := g.Next(elemPerPart)
+		refs, err := g.ReadRef(elemPerPart)
 		require.Equal(t, io.EOF, err, "Generator did not return EOF")
 		require.Zero(t, len(refs), "Returned too much data")
 	})
@@ -256,7 +251,7 @@ func TestBucketRefIterator(t *testing.T) {
 	// Reads not aligned to partition boundaries, the generator will have to
 	// split inputs across partitions.
 	t.Run("Unaligned", func(t *testing.T) {
-		g, err := NewBucketRefIterator(arrs)
+		g, err := NewBucketReader(arrs, STRIDED)
 		require.Nil(t, err, "Couldn't initialize generator")
 
 		elemPerInput := elemPerPart - 1
@@ -265,7 +260,7 @@ func TestBucketRefIterator(t *testing.T) {
 		inX := 0
 		lastVal := (byte)(0)
 		for {
-			refs, genErr := g.Next(elemPerInput)
+			refs, genErr := g.ReadRef(elemPerInput)
 			if genErr != io.EOF {
 				require.Nilf(t, genErr, "Error while reading input %v", inX)
 			}
@@ -323,12 +318,6 @@ func sortDistribTest(t *testing.T, factory data.ArrayFactory, worker DistribWork
 
 	outRaw, err := SortDistribFromRaw(origRaw, factory, worker)
 	require.Nil(t, err, "Sort Error")
-
-	prev := outRaw[0]
-	for i := 0; i < nElem; i++ {
-		require.GreaterOrEqualf(t, outRaw[i], prev, "output not in order at index %v", i)
-		prev = outRaw[i]
-	}
 
 	err = CheckSort(origRaw, outRaw)
 	require.Nilf(t, err, "Did not sort correctly: %v", err)

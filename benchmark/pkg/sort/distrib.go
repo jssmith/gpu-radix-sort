@@ -1,7 +1,6 @@
 package sort
 
 import (
-	"encoding/binary"
 	"fmt"
 	"io"
 	"math"
@@ -69,34 +68,16 @@ func LocalDistribWorker(inBkts []*data.PartRef, offset int, width int, factory d
 	for i := 0; i < len(inBkts); i++ {
 		totalLen += inBkts[i].NByte
 	}
-	nInt := totalLen / 4
 
-	// Fetch data to local memory
-	var inInts = make([]uint32, nInt)
-	inPos := 0
-	for i := 0; i < len(inBkts); i++ {
-		bktRef := inBkts[i]
-		parts, err := bktRef.Arr.GetParts()
-		if err != nil {
-			return nil, errors.Wrapf(err, "Couldn't get partitions from input ref %v", i)
-		}
-		reader, err := parts[bktRef.PartIdx].GetRangeReader(bktRef.Start, bktRef.Start+bktRef.NByte)
-		if err != nil {
-			return nil, errors.Wrapf(err, "Couldn't read partition from ref %v", i)
-		}
-
-		err = binary.Read(reader, binary.LittleEndian, inInts[inPos:inPos+(bktRef.NByte/4)])
-		if err != nil {
-			return nil, errors.Wrapf(err, "Couldn't read from input ref %v", i)
-		}
-		inPos += bktRef.NByte / 4
-		reader.Close()
+	inBytes, err := data.FetchPartRefs(inBkts)
+	if err != nil {
+		return nil, errors.Wrap(err, "Couldn't read input references")
 	}
 
 	// Actual Sort
 	nBucket := 1 << width
-	boundaries := make([]uint32, nBucket)
-	if err := GpuPartial(inInts, boundaries, offset, width); err != nil {
+	boundaries := make([]uint64, nBucket)
+	if err := GpuPartial(inBytes, boundaries, offset, width); err != nil {
 		return nil, errors.Wrap(err, "Local sort failed")
 	}
 
@@ -120,167 +101,31 @@ func LocalDistribWorker(inBkts []*data.PartRef, offset int, width int, factory d
 		start := (int)(boundaries[i])
 		var end int
 		if i == nBucket-1 {
-			end = nInt
+			end = len(inBytes)
 		} else {
 			end = (int)(boundaries[i+1])
 		}
 
-		err = binary.Write(writer, binary.LittleEndian, inInts[start:end])
+		n, err := writer.Write(inBytes[start:end])
 		if err != nil {
 			writer.Close()
 			return nil, errors.Wrap(err, "Could not write to output")
 		}
+		if n != end-start {
+			writer.Close()
+			return nil, fmt.Errorf("Could not write enough bytes to output: wanted %v, got %v", n, end-start)
+		}
 		writer.Close()
 	}
+
 	return outArr, nil
-}
-
-// Iterate a list of arrays by bucket (every array's part 0 then every array's
-// part 1). Implements io.Reader.
-type BucketReader struct {
-	arrs  []data.DistribArray
-	parts [][]data.DistribPart
-	arrX  int // Index of next array to read from
-	partX int // Index of next partition (bucket) to read from
-	dataX int // Index of next address within the partition to read from
-	nArr  int // Number of arrays
-	nPart int // Number of partitions (should be fixed for each array)
-}
-
-func NewBucketReader(sources []data.DistribArray) (*BucketReader, error) {
-	var err error
-
-	parts := make([][]data.DistribPart, len(sources))
-	for i, arr := range sources {
-		parts[i], err = arr.GetParts()
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return &BucketReader{arrs: sources, parts: parts,
-		arrX: 0, partX: 0,
-		nArr: len(sources), nPart: len(parts[0]),
-	}, nil
-}
-
-func (self *BucketReader) Read(out []byte) (n int, err error) {
-	nNeeded := len(out)
-	outX := 0
-	for ; self.partX < self.nPart; self.partX++ {
-		for ; self.arrX < self.nArr; self.arrX++ {
-			part := self.parts[self.arrX][self.partX]
-			partLen, err := part.Len()
-			if err != nil {
-				return 0, errors.Wrapf(err, "Couldn't determine length of input %v:%v", self.arrX, self.partX)
-			}
-
-			for self.dataX < partLen {
-				reader, err := part.GetRangeReader(self.dataX, 0)
-				if err != nil {
-					return outX, errors.Wrapf(err, "Couldnt read input %v:%v", self.arrX, self.partX)
-				}
-
-				nRead, readErr := reader.Read(out[outX:])
-				reader.Close()
-
-				self.dataX += nRead
-				nNeeded -= nRead
-				outX += nRead
-
-				if readErr != io.EOF && readErr != nil {
-					return outX, errors.Wrapf(err, "Failed to read from partition %v:%v", self.arrX, self.partX)
-				} else if nNeeded == 0 {
-					// There is a corner case where nNeeded==0 and
-					// readErr==io.EOF. In this case, the next call to
-					// BucketReader.Read() will re-read the partition and
-					// immediately get EOF again, which is fine (if slightly
-					// inefficient)
-					return outX, nil
-				} else if err == io.EOF {
-					break
-				}
-			}
-			self.dataX = 0
-		}
-		self.arrX = 0
-	}
-	return outX, io.EOF
-}
-
-// Same as BucketReader but returns PartRef's instead of bytes (doesn't
-// implement io.Reader but has similar behavior).
-type BucketRefIterator struct {
-	arrs  []data.DistribArray
-	parts [][]data.DistribPart
-	arrX  int // Index of next array to read from
-	partX int // Index of next partition (bucket) to read from
-	dataX int // Index of next address within the partition to read from
-	nArr  int // Number of arrays
-	nPart int // Number of partitions (should be fixed for each array)
-}
-
-func NewBucketRefIterator(source []data.DistribArray) (*BucketRefIterator, error) {
-	var err error
-
-	parts := make([][]data.DistribPart, len(source))
-	for i, arr := range source {
-		parts[i], err = arr.GetParts()
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return &BucketRefIterator{arrs: source, parts: parts,
-		arrX: 0, partX: 0,
-		nArr: len(source), nPart: len(parts[0]),
-	}, nil
-}
-
-// Return the next group of PartReferences to cover sz bytes. If there is no
-// more data, returns io.EOF. The returned PartRefs may not contain sz bytes in
-// this case.
-func (self *BucketRefIterator) Next(sz int) ([]*data.PartRef, error) {
-	var out []*data.PartRef
-
-	nNeeded := sz
-	for ; self.partX < self.nPart; self.partX++ {
-		for ; self.arrX < self.nArr; self.arrX++ {
-			part := self.parts[self.arrX][self.partX]
-			partLen, err := part.Len()
-			if err != nil {
-				return nil, errors.Wrapf(err, "Couldn't determine length of input %v:%v", self.arrX, self.partX)
-			}
-
-			for self.dataX < partLen {
-				nRemaining := partLen - self.dataX
-
-				var toWrite int
-				if nRemaining <= nNeeded {
-					toWrite = nRemaining
-				} else {
-					toWrite = nNeeded
-				}
-				out = append(out, &data.PartRef{Arr: self.arrs[self.arrX], PartIdx: self.partX, Start: self.dataX, NByte: toWrite})
-				self.dataX += toWrite
-				nNeeded -= toWrite
-
-				if nNeeded == 0 {
-					return out, nil
-				}
-			}
-			self.dataX = 0
-		}
-		self.arrX = 0
-	}
-	return out, io.EOF
 }
 
 // Distributed sort of arr. The bytes in arr will be interpreted as uint32's
 // Returns an ordered list of distributed arrays containing the sorted output
 // (concatenate each array's partitions in order to get final result). 'len' is
-// the number of uint32's in arr.
-func SortDistribFromArr(arr data.DistribArray, len int,
+// the number of bytes in arr.
+func SortDistribFromArr(arr data.DistribArray, sz int,
 	factory data.ArrayFactory, worker DistribWorker) ([]data.DistribArray, error) {
 	// Data Layout:
 	//	 - Distrib Arrays store all output from a single node
@@ -301,8 +146,9 @@ func SortDistribFromArr(arr data.DistribArray, len int,
 	width := 4            //number of bits to sort per round
 	nstep := (32 / width) // number of steps needed to fully sort
 
-	// Target number of uint32s to process per worker, the last worker might get less
-	maxPerWorker := (int)(math.Ceil((float64)(len) / (float64)(nworker)))
+	// Target number of bytes to process per worker, the last worker might get less
+	nElem := sz / 4
+	maxPerWorker := (int)(math.Ceil((float64)(nElem)/(float64)(nworker))) * 4
 
 	// Initial input is the output for "step -1"
 	var outputs []data.DistribArray
@@ -312,7 +158,7 @@ func SortDistribFromArr(arr data.DistribArray, len int,
 		inputs := outputs
 		outputs = make([]data.DistribArray, nworker)
 
-		inGen, err := NewBucketRefIterator(inputs)
+		inGen, err := NewBucketReader(inputs, STRIDED)
 		if err != nil {
 			return nil, err
 		}
@@ -322,10 +168,10 @@ func SortDistribFromArr(arr data.DistribArray, len int,
 		errChan := make(chan error, nworker)
 		for workerId := 0; workerId < nworker; workerId++ {
 			// Repartition previous output
-			workerInputs, genErr := inGen.Next(maxPerWorker * 4)
+			workerInputs, genErr := inGen.ReadRef(maxPerWorker)
 			if genErr == io.EOF && workerId+1 != nworker {
 				return nil, errors.New("Premature EOF from input generator")
-			} else if err != nil && err != io.EOF {
+			} else if genErr != nil && genErr != io.EOF {
 				return nil, errors.Wrap(err, "Input generator had an error")
 			}
 
@@ -354,14 +200,13 @@ func SortDistribFromArr(arr data.DistribArray, len int,
 			return nil, errors.Wrapf(firstErr, "Worker failure")
 		default:
 		}
-
 	}
 	return outputs, nil
 }
 
 // Sort a native byte array using DistribArrays from factory and remote worker
 // invoker 'worker'.
-func SortDistribFromRaw(inRaw []uint32, factory data.ArrayFactory, worker DistribWorker) ([]uint32, error) {
+func SortDistribFromRaw(inRaw []byte, factory data.ArrayFactory, worker DistribWorker) ([]byte, error) {
 	var err error
 
 	err = InitLibSort()
@@ -369,7 +214,10 @@ func SortDistribFromRaw(inRaw []uint32, factory data.ArrayFactory, worker Distri
 		return nil, errors.Wrap(err, "Failed to initialize libsort")
 	}
 
-	origArr, err := factory("FileDistribBench", 1)
+	origArr, err := factory("DistribFromRaw", 1)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create input distribarray")
+	}
 
 	parts, err := origArr.GetParts()
 	if err != nil {
@@ -381,23 +229,32 @@ func SortDistribFromRaw(inRaw []uint32, factory data.ArrayFactory, worker Distri
 		return nil, errors.Wrap(err, "Failed to get writer for partition")
 	}
 
-	err = binary.Write(writer, binary.LittleEndian, inRaw)
-	writer.Close()
+	n, err := writer.Write(inRaw)
 	if err != nil {
 		return nil, errors.Wrap(err, "error writing initial data")
+	} else if n != len(inRaw) {
+		return nil, fmt.Errorf("Could not write entire initial data")
 	}
+	writer.Close()
 
 	outArrs, err := SortDistribFromArr(origArr, len(inRaw), factory, worker)
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to sort distribArrays")
+	}
 
-	reader, err := NewBucketReader(outArrs)
+	reader, err := NewBucketReader(outArrs, STRIDED)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to get reader for output")
 	}
 
-	outRaw := make([]uint32, len(inRaw))
-	err = binary.Read(reader, binary.LittleEndian, outRaw)
-	if err != nil {
-		return nil, errors.Wrap(err, "Couldn't read output")
+	outRaw := make([]byte, len(inRaw))
+	// We don't use ioutil.ReadAll because we know the size of the output already
+	for n := 0; n < len(inRaw); {
+		nCur, err := reader.Read(outRaw[n:])
+		if err != nil {
+			return nil, errors.Wrap(err, "Failed to read results")
+		}
+		n += nCur
 	}
 
 	return outRaw, nil
