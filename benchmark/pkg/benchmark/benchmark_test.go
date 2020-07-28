@@ -4,6 +4,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/nathantp/gpu-radix-sort/benchmark/pkg/data"
@@ -52,5 +53,40 @@ func BenchmarkFileDistribLocal(b *testing.B) {
 				b.Fatalf("Sort failed: %v", err)
 			}
 		}()
+	}
+}
+
+func BenchmarkMemDistribLocal(b *testing.B) {
+	var err error
+
+	nElem := nmax_per_dev * ndev
+	// nElem := 1024 * 1024 * 4
+
+	origRaw, err := sort.GenerateInputs((uint64)(nElem))
+	if err != nil {
+		b.Fatalf("Failed to generate inputs: %v", err)
+	}
+	iterIn := make([]byte, len(origRaw))
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		copy(iterIn, origRaw)
+
+		b.StartTimer()
+
+		_, err = sort.SortDistribFromRaw(iterIn, func(name string, nbucket int) (data.DistribArray, error) {
+			var arr data.DistribArray
+			arr, err := data.NewMemDistribArray(nbucket)
+			return arr, err
+		}, sort.LocalDistribWorker)
+		if err != nil {
+			b.Fatalf("Sort Failed: %v", err)
+		}
+
+		b.StopTimer()
+
+		runtime.GC()
 	}
 }
