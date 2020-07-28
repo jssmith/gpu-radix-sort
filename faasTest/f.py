@@ -11,7 +11,7 @@ import functools
 import operator
 import time
 
-from memory_profiler import profile
+# from memory_profiler import profile
 # import cProfile
 
 # Ideally this would be set somewhere else (e.g. in AWS lambda you can put
@@ -21,7 +21,7 @@ if pathlib.Path('/handler/libsort.so').exists():
     os.environ['LD_LIBRARY_PATH'] = '/handler'
 import pylibsort
 
-@profile
+# @profile
 def f(event):
     # Temporary limitation for testing
     if event['arrType'] != 'file':

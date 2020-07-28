@@ -190,6 +190,8 @@ func TestFaasSortPartial(nelem int) error {
 }
 
 func TestFaasSortFull(nelem int) error {
+	nByte := nelem * 4
+
 	origRaw, err := sort.GenerateInputs((uint64)(nelem))
 	if err != nil {
 		return errors.Wrap(err, "Failed to generate inputs")
@@ -225,7 +227,7 @@ func TestFaasSortFull(nelem int) error {
 	mgr := GetMgr()
 	defer mgr.Destroy()
 
-	outArrs, err := sort.SortDistribFromArr(inArr, nelem*4, arrFactory, sort.InitFaasWorker(mgr))
+	outArrs, err := sort.SortDistribFromArr(inArr, nByte, arrFactory, sort.InitFaasWorker(mgr))
 	if err != nil {
 		return errors.Wrapf(err, "Sort returned an error: %v", err)
 	}
@@ -235,7 +237,7 @@ func TestFaasSortFull(nelem int) error {
 		return errors.Wrapf(err, "Failed to create bucket iterator")
 	}
 
-	outRaw := make([]byte, nelem)
+	outRaw := make([]byte, nByte)
 	for n := 0; n < len(origRaw); {
 		nCur, err := reader.Read(outRaw[n:])
 		if err != nil {
