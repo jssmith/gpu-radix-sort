@@ -58,8 +58,8 @@ type SortStats map[string]*PerfTimer
 func ReportStats(stats SortStats, writer io.Writer) {
 	for name, timer := range stats {
 		mean, stdev := stat.MeanStdDev(timer.Vals, nil)
-		fmt.Fprintf(writer, "%v (mean):\t%v\n", name, mean)
-		fmt.Fprintf(writer, "%v (std):\t%v\n", name, stdev)
+		fmt.Fprintf(writer, "%v (mean):\t%vs\n", name, mean/1e9)
+		fmt.Fprintf(writer, "%v (std):\t%vs\n", name, stdev/1e9)
 	}
 }
 

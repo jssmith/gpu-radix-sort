@@ -4,6 +4,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"github.com/nathantp/gpu-radix-sort/benchmark/pkg/data"
 	"github.com/nathantp/gpu-radix-sort/benchmark/pkg/sort"
@@ -71,7 +72,7 @@ func BenchFileLocalDistrib(arr []byte, stats SortStats) error {
 func RunBenchmarks() (map[string]SortStats, error) {
 	var err error
 
-	const nrepeat = 2
+	const nrepeat = 5
 	stats := make(map[string]SortStats)
 
 	// nElem := 1024 * 1024
@@ -90,6 +91,7 @@ func RunBenchmarks() (map[string]SortStats, error) {
 		if err != nil {
 			return stats, errors.Wrap(err, "Failed to benchmark MemLocalDistrib")
 		}
+		runtime.GC()
 	}
 
 	// stats["FileLocalDistrib"] = make(SortStats)

@@ -5,6 +5,7 @@ import (
 	"io"
 	"math"
 	"path/filepath"
+	"runtime"
 	"sync"
 
 	"github.com/nathantp/gpu-radix-sort/benchmark/pkg/data"
@@ -93,17 +94,17 @@ func LocalDistribWorker(inBkts []*data.PartRef, offset int, width int, factory d
 	}
 
 	for i := 0; i < nBucket; i++ {
-		writer, err := outParts[i].GetWriter()
-		if err != nil {
-			return nil, errors.Wrapf(err, "Failed to write bucket %v", i)
-		}
-
 		start := (int)(boundaries[i])
 		var end int
 		if i == nBucket-1 {
 			end = len(inBytes)
 		} else {
 			end = (int)(boundaries[i+1])
+		}
+
+		writer, err := outParts[i].GetWriter()
+		if err != nil {
+			return nil, errors.Wrapf(err, "Failed to write bucket %v", i)
 		}
 
 		n, err := writer.Write(inBytes[start:end])
@@ -143,7 +144,7 @@ func SortDistribFromArr(arr data.DistribArray, sz int,
 	//	 - Input distribArrays may be garbage collected after every worker has
 	//     provided their output (output distribArrays are copies, not references).
 	nworker := 2          //number of workers (degree of parallelism)
-	width := 4            //number of bits to sort per round
+	width := 8            //number of bits to sort per round
 	nstep := (32 / width) // number of steps needed to fully sort
 
 	// Target number of bytes to process per worker, the last worker might get less
@@ -157,6 +158,12 @@ func SortDistribFromArr(arr data.DistribArray, sz int,
 	for step := 0; step < nstep; step++ {
 		inputs := outputs
 		outputs = make([]data.DistribArray, nworker)
+
+		// This is perhaps over-optimization but it shaves ~6GB off the
+		// resident memory size for MemDistribArrays in the big test (13 vs
+		// 19). It likely would have little effect on other sorts of
+		// DistribArrays and has little/no performance benefit.
+		runtime.GC()
 
 		inGen, err := NewBucketReader(inputs, STRIDED)
 		if err != nil {
