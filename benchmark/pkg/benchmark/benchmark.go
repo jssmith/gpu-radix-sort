@@ -10,7 +10,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func BenchMemLocalDistrib(arr []uint32, stats SortStats) error {
+func BenchMemLocalDistrib(arr []byte, stats SortStats) error {
 	var err error
 	var ok bool
 
@@ -35,7 +35,7 @@ func BenchMemLocalDistrib(arr []uint32, stats SortStats) error {
 	return nil
 }
 
-func BenchFileLocalDistrib(arr []uint32, stats SortStats) error {
+func BenchFileLocalDistrib(arr []byte, stats SortStats) error {
 	var ok bool
 
 	var TTotal *PerfTimer
@@ -74,14 +74,14 @@ func RunBenchmarks() (map[string]SortStats, error) {
 	const nrepeat = 2
 	stats := make(map[string]SortStats)
 
-	nElem := 1024 * 1024
-	// nElem := nmax_per_dev * ndev
+	// nElem := 1024 * 1024
+	nElem := nmax_per_dev * ndev
 
 	origRaw, err := sort.GenerateInputs((uint64)(nElem))
 	if err != nil {
 		return stats, errors.Wrap(err, "Failed to generate inputs")
 	}
-	iterIn := make([]uint32, nElem)
+	iterIn := make([]byte, len(origRaw))
 
 	stats["MemLocalDistrib"] = make(SortStats)
 	for i := 0; i < nrepeat; i++ {
@@ -92,13 +92,13 @@ func RunBenchmarks() (map[string]SortStats, error) {
 		}
 	}
 
-	stats["FileLocalDistrib"] = make(SortStats)
-	for i := 0; i < nrepeat; i++ {
-		copy(iterIn, origRaw)
-		err = BenchFileLocalDistrib(iterIn, stats["FileLocalDistrib"])
-		if err != nil {
-			return stats, errors.Wrap(err, "Failed to benchmark MemLocalDistrib")
-		}
-	}
+	// stats["FileLocalDistrib"] = make(SortStats)
+	// for i := 0; i < nrepeat; i++ {
+	// 	copy(iterIn, origRaw)
+	// 	err = BenchFileLocalDistrib(iterIn, stats["FileLocalDistrib"])
+	// 	if err != nil {
+	// 		return stats, errors.Wrap(err, "Failed to benchmark MemLocalDistrib")
+	// 	}
+	// }
 	return stats, nil
 }

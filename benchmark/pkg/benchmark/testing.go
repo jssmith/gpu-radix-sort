@@ -1,6 +1,7 @@
 package benchmark
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io/ioutil"
@@ -15,12 +16,14 @@ import (
 
 // End to end testing
 
-// Creates a FaaS test input from an input int array. This includes populating
+// Creates a FaaS test input from an input byte array. This includes populating
 // a FileDistribArray in sharedDir. narr and npart specify how inData should be
 // split among distributed arrays. Typically they will be (1,1) but may be set
 // differently for testing purposes.
-func createFaasRefs(inData []uint32, sharedDir string, narr int, npart int) ([]*faas.FaasFilePartRef, error) {
-	elemPerPart := len(inData) / (narr * npart)
+func createFaasRefs(inData []byte, sharedDir string, narr int, npart int) ([]*faas.FaasFilePartRef, error) {
+	nPartTotal := narr * npart
+	nElem := len(inData) / 4
+	maxPerPart := (nElem / nPartTotal) * 4
 
 	var refs []*faas.FaasFilePartRef
 	for arrX := 0; arrX < narr; arrX++ {
@@ -36,8 +39,8 @@ func createFaasRefs(inData []uint32, sharedDir string, narr int, npart int) ([]*
 		}
 
 		for partX := 0; partX < npart; partX++ {
-			start := ((arrX * npart) + partX) * elemPerPart
-			end := start + elemPerPart
+			start := ((arrX * npart) + partX) * maxPerPart
+			end := start + maxPerPart
 			if (arrX*npart + partX) == (narr*npart)-1 {
 				end = len(inData)
 			}
@@ -47,10 +50,11 @@ func createFaasRefs(inData []uint32, sharedDir string, narr int, npart int) ([]*
 				return nil, errors.Wrap(err, "Failed to get input writer")
 			}
 
-			err = binary.Write(writer, binary.LittleEndian, inData[start:end])
+			n, err := writer.Write(inData[start:end])
 			if err != nil {
-				return nil, errors.Wrap(err,
-					"Failed to write test inputs to distributed array")
+				return nil, errors.Wrap(err, "Error while writing to input")
+			} else if n < end-start {
+				return nil, fmt.Errorf("Failed to write entire partition")
 			}
 			writer.Close()
 
@@ -66,10 +70,9 @@ func createFaasRefs(inData []uint32, sharedDir string, narr int, npart int) ([]*
 	}
 
 	return refs, nil
-
 }
 
-func checkFaasPartialSort(expected []uint32, outArr data.DistribArray, offset int, width int) error {
+func checkFaasPartialSort(expected []byte, outArr data.DistribArray, offset int, width int) error {
 	ngroup := (1 << width)
 
 	parts, err := outArr.GetParts()
@@ -81,8 +84,14 @@ func checkFaasPartialSort(expected []uint32, outArr data.DistribArray, offset in
 		return fmt.Errorf("Output doesn't have enough partitions: %v", len(parts))
 	}
 
+	expectedInts := make([]uint32, len(expected)/4)
+	err = binary.Read(bytes.NewReader(expected), binary.LittleEndian, expectedInts)
+	if err != nil {
+		return errors.Wrap(err, "Could not interpret reference input")
+	}
+
 	refGroupLens := make([]int, ngroup)
-	for _, v := range expected {
+	for _, v := range expectedInts {
 		group := sort.GroupBits(v, offset, width)
 		refGroupLens[group]++
 	}
@@ -216,20 +225,23 @@ func TestFaasSortFull(nelem int) error {
 	mgr := GetMgr()
 	defer mgr.Destroy()
 
-	outArrs, err := sort.SortDistribFromArr(inArr, nelem, arrFactory, sort.InitFaasWorker(mgr))
+	outArrs, err := sort.SortDistribFromArr(inArr, nelem*4, arrFactory, sort.InitFaasWorker(mgr))
 	if err != nil {
 		return errors.Wrapf(err, "Sort returned an error: %v", err)
 	}
 
-	reader, err := sort.NewBucketReader(outArrs)
+	reader, err := sort.NewBucketReader(outArrs, sort.STRIDED)
 	if err != nil {
 		return errors.Wrapf(err, "Failed to create bucket iterator")
 	}
 
-	outRaw := make([]uint32, nelem)
-	err = binary.Read(reader, binary.LittleEndian, outRaw)
-	if err != nil {
-		return errors.Wrapf(err, "Failed while reading output")
+	outRaw := make([]byte, nelem)
+	for n := 0; n < len(origRaw); {
+		nCur, err := reader.Read(outRaw[n:])
+		if err != nil {
+			return errors.Wrap(err, "Failed to read results")
+		}
+		n += nCur
 	}
 
 	// Process response

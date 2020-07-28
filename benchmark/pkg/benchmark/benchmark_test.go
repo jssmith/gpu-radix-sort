@@ -27,7 +27,7 @@ func BenchmarkFileDistribLocal(b *testing.B) {
 		b.Fatalf("Failed to generate inputs: %v", err)
 	}
 
-	iterIn := make([]uint32, nElem)
+	iterIn := make([]byte, len(origRaw))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		// anonymous function for defer behavior

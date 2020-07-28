@@ -12,7 +12,11 @@ import (
 )
 
 // Specific to agpu1 machine, edit for your environment
+
+// Maximum number of uints that can be sorted by one device
 const nmax_per_dev = (256 * 1024 * 1024)
+
+// Number of available devices (GPUs)
 const ndev = 2
 
 // A helper object for timing events, the timer can be reused multiple times in
