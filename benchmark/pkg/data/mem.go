@@ -70,6 +70,10 @@ func (self *MemDistribPart) GetWriter() (io.WriteCloser, error) {
 }
 
 func (self *MemDistribPart) Len() (int, error) {
+	// Add this back in to simulate different backing store delays
+	// start := time.Now()
+	// for time.Since(start).Microseconds() <= 100 {
+	// }
 	return len(self.buf), nil
 }
 
