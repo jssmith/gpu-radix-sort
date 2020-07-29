@@ -21,8 +21,12 @@ func BenchmarkFileDistribLocal(b *testing.B) {
 
 	// Should be an odd (in both senses) number to pick up unaligned corner
 	// cases
-	nElem := 1111
+	// nElem := 1111
 	// nElem := (1024 * 1024) + 5
+	// XXX need to think hard about doing this big of an experiment. We're
+	// talking hundreds of thousands of files and 10s of GB of data. The local
+	// filesystem is probably inadequate.
+	// nElem := nmax_per_dev * ndev
 	origRaw, err := sort.GenerateInputs((uint64)(nElem))
 	if err != nil {
 		b.Fatalf("Failed to generate inputs: %v", err)
