@@ -41,7 +41,7 @@ type FileDistribWriter struct {
 }
 
 // Create a new FileDistribArray object from an existing on-disk array
-func NewFileDistribArrayExisting(rootPath string) (*FileDistribArray, error) {
+func OpenFileDistribArray(rootPath string) (*FileDistribArray, error) {
 	var err error
 
 	arr := &FileDistribArray{}
@@ -93,7 +93,7 @@ func NewFileDistribArrayExisting(rootPath string) (*FileDistribArray, error) {
 
 // Create a new file-backed distributed array. caps describes the size of each
 // partition (like capacity in a slice). Partitions cannot be resized.
-func NewFileDistribArray(rootPath string, shape *DistribArrayShape) (*FileDistribArray, error) {
+func CreateFileDistribArray(rootPath string, shape DistribArrayShape) (*FileDistribArray, error) {
 	var err error
 
 	arr := &FileDistribArray{}

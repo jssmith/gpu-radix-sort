@@ -11,9 +11,9 @@ func TestFetchPartRefs(t *testing.T) {
 	shape0 := DistribArrayShape{caps: []int{nByte, nByte}, lens: []int{0, 0}}
 	shape1 := DistribArrayShape{caps: []int{nByte, nByte}, lens: []int{0, 0}}
 
-	a0, err := CreateMemDistribArray("test0", shape0)
+	a0, err := CreateMemDistribArray("FetchPartRef0", shape0)
 	require.Nil(t, err, "Failed to create input array")
-	a1, err := CreateMemDistribArray("test1", shape1)
+	a1, err := CreateMemDistribArray("FetchPartRef1", shape1)
 	require.Nil(t, err, "Failed to create input array")
 
 	raw1 := generateBytes(t, a0, nByte)

@@ -32,7 +32,7 @@ func TestMemDistribArr(t *testing.T) {
 
 	rand.Seed(0)
 
-	arr0, err := CreateMemDistribArray("test0", shape)
+	arr0, err := CreateMemDistribArray("memArrTest0", shape)
 	require.Nilf(t, err, "Failed to initialize array: %v", err)
 
 	raw0 := generateBytes(t, arr0, targetSz)
@@ -48,7 +48,7 @@ func TestMemDistribArr(t *testing.T) {
 	t.Run("ReOpen", func(t *testing.T) {
 		arr0.Close()
 
-		reArr0, err := OpenMemDistribArray("test0")
+		reArr0, err := OpenMemDistribArray("memArrTest0")
 		require.Nil(t, err, "Failed to reopen first array")
 		checkArr(t, reArr0, raw0)
 
@@ -57,17 +57,17 @@ func TestMemDistribArr(t *testing.T) {
 
 	t.Run("MultipleArrays", func(t *testing.T) {
 		newShape := DistribArrayShape{caps: []int{targetSz, targetSz}, lens: []int{0, 0}}
-		arr1, err := CreateMemDistribArray("test1", newShape)
+		arr1, err := CreateMemDistribArray("memArrTest1", newShape)
 		require.Nilf(t, err, "Failed to initialize array: %v", err)
 
 		raw1 := generateBytes(t, arr1, targetSz)
 		arr1.Close()
 
 		// Check reopening both
-		reArr0, err := OpenMemDistribArray("test0")
-		require.Nilf(t, err, "Failed to reopen test0")
-		reArr1, err := OpenMemDistribArray("test1")
-		require.Nilf(t, err, "Failed to reopen test1")
+		reArr0, err := OpenMemDistribArray("memArrTest0")
+		require.Nilf(t, err, "Failed to reopen memArrTest0")
+		reArr1, err := OpenMemDistribArray("memArrTest1")
+		require.Nilf(t, err, "Failed to reopen memArrTest1")
 
 		checkArr(t, reArr0, raw0)
 		checkArr(t, reArr1, raw1)
@@ -79,17 +79,17 @@ func TestMemDistribArr(t *testing.T) {
 	t.Run("Destroy", func(t *testing.T) {
 		newShape := DistribArrayShape{caps: []int{targetSz, targetSz, targetSz}, lens: []int{0, 0, 0}}
 
-		reArr0, err := OpenMemDistribArray("test0")
-		require.Nilf(t, err, "Failed to reopen test0")
+		reArr0, err := OpenMemDistribArray("memArrTest0")
+		require.Nilf(t, err, "Failed to reopen memArrTest0")
 
 		// Should Error
-		_, err = CreateMemDistribArray("test0", newShape)
+		_, err = CreateMemDistribArray("memArrTest0", newShape)
 		require.NotNil(t, err, "Did not detect existing array")
 
 		reArr0.Destroy()
 
 		// Now should succeed
-		newArr0, err := CreateMemDistribArray("test0", newShape)
+		newArr0, err := CreateMemDistribArray("memArrTest0", newShape)
 		require.Nil(t, err, "Failed to recreate array after destroy")
 
 		// Though not guaranteed by the interface, MemDistribArray objects
