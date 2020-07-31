@@ -1,93 +1,104 @@
 package data
 
 import (
-	"bytes"
-	"io"
+	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
-func testMemRangeReader(t *testing.T, part *MemDistribPart, start int, stop int) {
-	// semantics of RangeReader
-	var realStop int
-	if stop <= 0 {
-		realStop = len(part.buf) + stop
-	} else {
-		realStop = stop
-	}
-
-	readLen := realStop - start
-
-	out := make([]byte, len(part.buf))
-	reader, err := part.GetRangeReader(start, stop)
-	require.Nil(t, err, "Failed to get reader")
-
-	n, err := reader.Read(out)
-	require.Equalf(t, io.EOF, err, "Didn't return EOF")
-	require.Equalf(t, readLen, n, "Didn't read enough values")
-	require.Truef(t, bytes.Equal(out[:readLen], part.buf[start:realStop]), "Returned wrong values: expected %v, got %v", part.buf, out)
-}
-
 func TestMemDistribPartRange(t *testing.T) {
 	var err error
-	pBuf := []byte{0, 1, 2, 3}
-	p, err := NewMemDistribPart(pBuf)
+
+	targetSz := 4
+	shape := DistribArrayShape{caps: []int{targetSz}, lens: []int{0}}
+
+	arr, err := CreateMemDistribArray("TestRangeReader", shape)
 	require.Nil(t, err)
 
-	t.Run("Full Range", func(t *testing.T) { testMemRangeReader(t, p, 0, 0) })
-	t.Run("First Two", func(t *testing.T) { testMemRangeReader(t, p, 0, 2) })
-	t.Run("Middle", func(t *testing.T) { testMemRangeReader(t, p, 1, 3) })
-	t.Run("Last Two Explicit", func(t *testing.T) { testMemRangeReader(t, p, 3, 4) })
-	t.Run("Last Two Zero End", func(t *testing.T) { testMemRangeReader(t, p, 3, 0) })
-	t.Run("Negative End", func(t *testing.T) { testMemRangeReader(t, p, 1, -1) })
+	raw := generateBytes(t, arr, targetSz)
+
+	t.Run("Full Range", func(t *testing.T) { testPartRangeReader(t, arr, raw, 0, 0) })
+	t.Run("First Two", func(t *testing.T) { testPartRangeReader(t, arr, raw, 0, 2) })
+	t.Run("Middle", func(t *testing.T) { testPartRangeReader(t, arr, raw, 1, 3) })
+	t.Run("Last Two Explicit", func(t *testing.T) { testPartRangeReader(t, arr, raw, 3, 4) })
+	t.Run("Last Two Zero End", func(t *testing.T) { testPartRangeReader(t, arr, raw, 3, 0) })
+	t.Run("Negative End", func(t *testing.T) { testPartRangeReader(t, arr, raw, 1, -1) })
 }
 
-func TestMemDistribPart(t *testing.T) {
-	pBuf := make([]byte, 0)
-	p, err := NewMemDistribPart(pBuf)
-	require.Nil(t, err)
+func TestMemDistribArr(t *testing.T) {
+	targetSz := 64
+	shape := DistribArrayShape{caps: []int{targetSz, targetSz}, lens: []int{0, 0}}
 
-	require.Zerof(t, len(p.buf), "Initial partition has non-zero length: %v", len(p.buf))
+	rand.Seed(0)
 
-	writer, err := p.GetWriter()
-	require.Nil(t, err, "Failed to get writer")
-
-	n, err := writer.Write([]byte{(byte)(42)})
-	require.Nilf(t, err, "Write reported an error: %v", err)
-	writer.Close()
-
-	require.NotZerof(t, n, "Writer didn't report writing anything")
-	require.Equalf(t, 1, len(p.buf), "Writer expanded slice wrong: Expected 1, Got %v", len(p.buf))
-	require.Equalf(t, (byte)(42), p.buf[0], "Wrote incorrect value: Expected 42, Got %v", p.buf[0])
-
-	reader, err := p.GetReader()
-	require.Nil(t, err, "Failed to get reader")
-
-	out := make([]byte, 1)
-	n, err = reader.Read(out)
-	require.Equalf(t, err, io.EOF, "Read did not report EOF, actual error: %v", err)
-	reader.Close()
-
-	require.Equalf(t, 1, n, "Reader reported wrong number of bytes")
-	require.Equalf(t, 1, len(out), "Reader broke slice length")
-	require.Equalf(t, (byte)(42), out[0], "Read Incorrect Value")
-}
-
-func TestMemDistribArrBytes(t *testing.T) {
-	npart := 2
-	partLen := 64
-
-	arr, err := NewMemDistribArray(npart)
+	arr0, err := CreateMemDistribArray("test0", shape)
 	require.Nilf(t, err, "Failed to initialize array: %v", err)
 
-	raw := generateBytes(t, arr, partLen)
+	raw0 := generateBytes(t, arr0, targetSz)
 
 	t.Run("ReadWrite", func(t *testing.T) {
-		checkArr(t, arr, raw, partLen)
+		checkArr(t, arr0, raw0)
 	})
 
 	t.Run("ReRead", func(t *testing.T) {
-		checkArr(t, arr, raw, partLen)
+		checkArr(t, arr0, raw0)
+	})
+
+	t.Run("ReOpen", func(t *testing.T) {
+		arr0.Close()
+
+		reArr0, err := OpenMemDistribArray("test0")
+		require.Nil(t, err, "Failed to reopen first array")
+		checkArr(t, reArr0, raw0)
+
+		reArr0.Close()
+	})
+
+	t.Run("MultipleArrays", func(t *testing.T) {
+		newShape := DistribArrayShape{caps: []int{targetSz, targetSz}, lens: []int{0, 0}}
+		arr1, err := CreateMemDistribArray("test1", newShape)
+		require.Nilf(t, err, "Failed to initialize array: %v", err)
+
+		raw1 := generateBytes(t, arr1, targetSz)
+		arr1.Close()
+
+		// Check reopening both
+		reArr0, err := OpenMemDistribArray("test0")
+		require.Nilf(t, err, "Failed to reopen test0")
+		reArr1, err := OpenMemDistribArray("test1")
+		require.Nilf(t, err, "Failed to reopen test1")
+
+		checkArr(t, reArr0, raw0)
+		checkArr(t, reArr1, raw1)
+
+		reArr0.Close()
+		reArr1.Close()
+	})
+
+	t.Run("Destroy", func(t *testing.T) {
+		newShape := DistribArrayShape{caps: []int{targetSz, targetSz, targetSz}, lens: []int{0, 0, 0}}
+
+		reArr0, err := OpenMemDistribArray("test0")
+		require.Nilf(t, err, "Failed to reopen test0")
+
+		// Should Error
+		_, err = CreateMemDistribArray("test0", newShape)
+		require.NotNil(t, err, "Did not detect existing array")
+
+		reArr0.Destroy()
+
+		// Now should succeed
+		newArr0, err := CreateMemDistribArray("test0", newShape)
+		require.Nil(t, err, "Failed to recreate array after destroy")
+
+		// Though not guaranteed by the interface, MemDistribArray objects
+		// happen to remain valid after destroy (they only get really freed
+		// when the last object reference goes out of scope). This test
+		// wouldn't work for e.g. FileDistribArrays.
+		require.NotEqualf(t, newArr0.shape.lens, reArr0.shape.lens, "Re-used destroyed array (shape lengths didn't get reset)")
+		require.Equalf(t, 0, len(newArr0.parts[0]), "Re-used destroyed array (same backing store for parts)")
+
+		newArr0.Destroy()
 	})
 }

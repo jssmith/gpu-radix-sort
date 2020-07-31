@@ -1,12 +1,36 @@
 package data
 
 import (
+	"bytes"
 	"crypto/rand"
 	"io"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
+
+// Check if a PartRangeReader returns the right data. Always checks part0 which
+// is assumed to contain ref.
+func testPartRangeReader(t *testing.T, arr DistribArray, ref []byte, start int, stop int) {
+	// semantics of RangeReader
+	var realStop int
+	if stop <= 0 {
+		realStop = len(ref) + stop
+	} else {
+		realStop = stop
+	}
+
+	readLen := realStop - start
+
+	out := make([]byte, len(ref))
+	reader, err := arr.GetPartRangeReader(0, start, stop)
+	require.Nil(t, err, "Failed to get reader")
+
+	n, err := reader.Read(out)
+	require.Equalf(t, io.EOF, err, "Didn't return EOF")
+	require.Equalf(t, readLen, n, "Didn't read enough values")
+	require.Truef(t, bytes.Equal(out[:readLen], ref[start:realStop]), "Returned wrong values: expected %v, got %v", ref, out)
+}
 
 // A very pedantic read procedure with lots of checking. Most people will just use ioutil.ReadFull.
 func readPart(t *testing.T, partReader io.ReadCloser, dst []byte) {
