@@ -8,22 +8,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func writePart(t *testing.T, part DistribPart, src []byte) {
-	partWriter, err := part.GetWriter()
-	require.Nilf(t, err, "Failed to get writer: %v", err)
-
-	n, err := partWriter.Write(src)
-	require.Nilf(t, err, "Writing failed: %v", err)
-	require.Equalf(t, n, len(src), "Failed to write all bytes but didn't receive error")
-
-	err = partWriter.Close()
-	require.Nilf(t, err, "Closing partWriter failed: %v", err)
-}
-
-func readPart(t *testing.T, part DistribPart, dst []byte) {
+// A very pedantic read procedure with lots of checking. Most people will just use ioutil.ReadFull.
+func readPart(t *testing.T, partReader io.ReadCloser, dst []byte) {
 	var err error
-	partReader, err := part.GetReader()
-	require.Nil(t, err, "Failed to get reader for partition")
 
 	ntotal := 0
 	for ntotal < len(dst) {
@@ -51,34 +38,41 @@ func readPart(t *testing.T, part DistribPart, dst []byte) {
 }
 
 func generateBytes(t *testing.T, arr DistribArray, partLen int) (raw []byte) {
-	parts, err := arr.GetParts()
-	require.Nilf(t, err, "Failed to get partitions: %v", err)
+	shape, err := arr.GetShape()
+	require.Nilf(t, err, "Failed to get shape of array")
 
-	npart := len(parts)
-	raw = make([]byte, npart*partLen)
+	raw = make([]byte, shape.NPart()*partLen)
 	rand.Read(raw)
-	for partIdx := 0; partIdx < npart; partIdx++ {
+	for partIdx := 0; partIdx < shape.NPart(); partIdx++ {
 		globalStart := partIdx * partLen
-		t.Logf("Processing partition %v\n", partIdx)
-		part := parts[partIdx]
 
-		// Write to partition
-		writePart(t, part, raw[globalStart:globalStart+partLen])
+		t.Logf("Processing partition %v\n", partIdx)
+		writer, err := arr.GetPartWriter(partIdx)
+		require.Nilf(t, err, "Failed to get writer for partition %v", partIdx)
+
+		n, err := writer.Write(raw[globalStart : globalStart+partLen])
+		require.Nilf(t, err, "Error while writing to part %v", partIdx)
+		require.Equalf(t, partLen, n, "Failed to write enough data to part %v", partIdx)
+
+		err = writer.Close()
+		require.Nilf(t, err, "Failed to close writer for part %v", partIdx)
 	}
 
 	return raw
 }
 
-func checkArr(t *testing.T, arr DistribArray, ref []byte, partLen int) {
-	parts, err := arr.GetParts()
-	require.Nilf(t, err, "Failed to get partitions: %v", err)
+func checkArr(t *testing.T, arr DistribArray, ref []byte) {
+	shape, err := arr.GetShape()
+	require.Nilf(t, err, "Failed to get shape of array")
 
-	npart := len(parts)
-
-	for partIdx := 0; partIdx < npart; partIdx++ {
-		// Re-allocate each time to zero out
+	for partIdx := 0; partIdx < shape.NPart(); partIdx++ {
+		partLen := shape.Len(partIdx)
 		retBytes := make([]byte, partLen)
-		readPart(t, parts[partIdx], retBytes)
+
+		reader, err := arr.GetPartReader(partIdx)
+		require.Nilf(t, err, "Failed to get reader for part %v", partIdx)
+
+		readPart(t, reader, retBytes)
 
 		// Validate
 		for i := 0; i < partLen; i++ {

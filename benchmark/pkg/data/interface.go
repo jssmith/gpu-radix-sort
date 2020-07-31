@@ -4,26 +4,56 @@ import (
 	"io"
 )
 
-// Represents a partition of a DistribArray
-type DistribPart interface {
-	// Returns a reader that will return bytes from the partition in the given
-	// contiguous range. End may be negative to index backwards from the end. A
-	// zero end will read until the end of the partition.
-	GetRangeReader(start, end int) (io.ReadCloser, error)
+// Describe the logical layout of a distributed array
+type DistribArrayShape struct {
+	lens []int // Current number of bytes per partition
+	caps []int // Current capacity of each partition a zero capcity indicates unlimited
+}
 
-	// Returns a reader that will return bytes from the entire partition.
-	GetReader() (io.ReadCloser, error)
+// DistribArrayShapes are immutable so we abstract access
+func (self *DistribArrayShape) Len(partIdx int) int {
+	return self.lens[partIdx]
+}
 
-	// Returns a writer that will append to the partition
-	GetWriter() (io.WriteCloser, error)
+func (self *DistribArrayShape) Cap(partIdx int) int {
+	return self.caps[partIdx]
+}
 
-	// Return the number of bytes currently in this partition
-	Len() (int, error)
+func (self *DistribArrayShape) NPart() int {
+	return len(self.caps)
 }
 
 // Represents an array of bytes that is suitable for a distributed sort.
+//
+// Semantics:
+//		DistribArrays represent an interface to some external storage. Arrays
+//		can be opened and closed multiple times, the way the backing data is
+//		identified is implementation specific. The exact consistency semantics
+//		are up to the implementation, but a conservative client should not have
+//		more than one open DistribArray for the same backing array at the same
+//		time (Close() commits local changes, the backing object may be in an
+//		inconsistent state between create and Close() calls).
 type DistribArray interface {
-	GetParts() ([]DistribPart, error)
+	GetShape() (*DistribArrayShape, error)
+
+	// It is not generally safe to have more than one reader or writer open at
+	// a time. Closing a reader or writer commits changes to the local object
+	// but may or may not modify the backing store (call DistribArray.Close()
+	// to commit changes to the backing store).
+	GetPartReader(partId int) (io.ReadCloser, error)
+	GetPartRangeReader(partId, start, end int) (io.ReadCloser, error)
+
+	// Writers are append-only
+	GetPartWriter(partId int) (io.WriteCloser, error)
+
+	// Release any process-local resources associated with this array. It is
+	// no longer safe to use this object.
+	Close() error
+
+	// Release any global resources (e.g. the backing store) associated with
+	// this array (implies close, no need to call both). No users internal or
+	// external may access the object after this.
+	Destroy() error
 }
 
 // A reference to an input partition
@@ -36,4 +66,4 @@ type PartRef struct {
 
 // A generic interface to creating new DistribArrays, users must provide their
 // own implementations of this.
-type ArrayFactory func(name string, nbucket int) (DistribArray, error)
+// type ArrayFactory func(name string, nbucket int) (DistribArray, error)

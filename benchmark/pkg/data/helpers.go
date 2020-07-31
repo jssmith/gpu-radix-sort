@@ -15,7 +15,7 @@ func FetchPartRefs(refs []*PartRef) ([]byte, error) {
 	}
 
 	// Used to memoize the result of GetParts() which can be expensive
-	arrParts := make(map[DistribArray][]DistribPart)
+	// arrParts := make(map[DistribArray][]DistribPart)
 
 	// Fetch data to local memory
 	var out = make([]byte, totalLen)
@@ -23,18 +23,7 @@ func FetchPartRefs(refs []*PartRef) ([]byte, error) {
 	for i := 0; i < len(refs); i++ {
 		bktRef := refs[i]
 
-		var parts []DistribPart
-		var ok bool
-		if parts, ok = arrParts[bktRef.Arr]; !ok {
-			parts, err = bktRef.Arr.GetParts()
-			if err != nil {
-				return nil, errors.Wrapf(err, "Couldn't get partitions from input ref %v", i)
-			}
-
-			arrParts[bktRef.Arr] = parts
-		}
-
-		reader, err := parts[bktRef.PartIdx].GetRangeReader(bktRef.Start, bktRef.Start+bktRef.NByte)
+		reader, err := bktRef.Arr.GetRangeReader(bktRef.PartIdx, bktRef.Start, bktRef.Start+bktRef.NByte)
 		if err != nil {
 			return nil, errors.Wrapf(err, "Couldn't read partition from ref %v", i)
 		}
