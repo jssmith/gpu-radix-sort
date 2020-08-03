@@ -57,11 +57,15 @@ func (self *DistribArrayShape) NPart() int {
 type DistribArray interface {
 	GetShape() (*DistribArrayShape, error)
 
-	// It is not generally safe to have more than one reader or writer open at
-	// a time. Closing a reader or writer commits changes to the local object
-	// but may or may not modify the backing store (call DistribArray.Close()
-	// to commit changes to the backing store).
+	// It is not generally safe to have more than one writer open at a time.
+	// Closing a writer commits changes to the local object but may or may not
+	// modify the backing store (call DistribArray.Close() to commit changes to
+	// the backing store).
 	GetPartReader(partId int) (io.ReadCloser, error)
+
+	// Multiple readers may exist simultaneously for the same array, but the
+	// user must ensure that the array does not change while there are active
+	// readers.
 	GetPartRangeReader(partId, start, end int) (io.ReadCloser, error)
 
 	// Writers are append-only

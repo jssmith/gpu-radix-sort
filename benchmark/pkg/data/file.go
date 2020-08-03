@@ -174,7 +174,11 @@ func (self *FileDistribArray) GetPartRangeReader(partId, start, end int) (io.Rea
 
 	reader := FileDistribRangeReader{}
 
-	reader.file = self.fd
+	// Re-open file to get thread-safe readers
+	reader.file, err = os.Open(filepath.Join(self.RootPath, "data.dat"))
+	if err != nil {
+		return nil, err
+	}
 
 	_, err = reader.file.Seek(self.starts[partId]+(int64)(start), 0)
 	if err != nil {
@@ -254,9 +258,7 @@ func (self *FileDistribRangeReader) Read(dst []byte) (n int, err error) {
 }
 
 func (self *FileDistribRangeReader) Close() error {
-	// The file discriptor belongs to the DistribArray. Seeking is always
-	// handled by the new readers or writers and doesn't need to be reset here.
-	return nil
+	return self.file.Close()
 }
 
 func (self *FileDistribArray) GetPartWriter(partId int) (io.WriteCloser, error) {

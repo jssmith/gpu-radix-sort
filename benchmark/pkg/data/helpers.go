@@ -1,6 +1,7 @@
 package data
 
 import (
+	"fmt"
 	"io"
 
 	"github.com/pkg/errors"
@@ -25,6 +26,7 @@ func FetchPartRefs(refs []*PartRef) ([]byte, error) {
 
 		n, err := io.ReadFull(reader, out[inPos:inPos+bktRef.NByte])
 		if err != nil || n != bktRef.NByte {
+			fmt.Printf("len, n: %v, %v\n", bktRef.NByte, n)
 			return nil, errors.Wrapf(err, "Couldn't read from input ref %v", i)
 		}
 
