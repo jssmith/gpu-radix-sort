@@ -11,7 +11,7 @@ func TestMemDistribPartRange(t *testing.T) {
 	var err error
 
 	targetSz := 4
-	shape := DistribArrayShape{caps: []int{targetSz}, lens: []int{0}}
+	shape := CreateShapeUniform(targetSz, 1)
 
 	arr, err := CreateMemDistribArray("TestRangeReader", shape)
 	require.Nil(t, err)
@@ -28,7 +28,7 @@ func TestMemDistribPartRange(t *testing.T) {
 
 func TestMemDistribArr(t *testing.T) {
 	targetSz := 64
-	shape := DistribArrayShape{caps: []int{targetSz, targetSz}, lens: []int{0, 0}}
+	shape := CreateShapeUniform(targetSz, 2)
 
 	rand.Seed(0)
 
@@ -56,7 +56,7 @@ func TestMemDistribArr(t *testing.T) {
 	})
 
 	t.Run("MultipleArrays", func(t *testing.T) {
-		newShape := DistribArrayShape{caps: []int{targetSz, targetSz}, lens: []int{0, 0}}
+		newShape := CreateShapeUniform(targetSz, 2)
 		arr1, err := CreateMemDistribArray("memArrTest1", newShape)
 		require.Nilf(t, err, "Failed to initialize array: %v", err)
 
@@ -77,7 +77,7 @@ func TestMemDistribArr(t *testing.T) {
 	})
 
 	t.Run("Destroy", func(t *testing.T) {
-		newShape := DistribArrayShape{caps: []int{targetSz, targetSz, targetSz}, lens: []int{0, 0, 0}}
+		newShape := CreateShapeUniform(targetSz, 3)
 
 		reArr0, err := OpenMemDistribArray("memArrTest0")
 		require.Nilf(t, err, "Failed to reopen memArrTest0")
@@ -101,4 +101,8 @@ func TestMemDistribArr(t *testing.T) {
 
 		newArr0.Destroy()
 	})
+}
+
+func TestMemFactory(t *testing.T) {
+	testArrayFactory(t, MemArrayFactory)
 }

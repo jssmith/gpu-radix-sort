@@ -12,13 +12,13 @@ import (
 
 func TestFileDistribArr(t *testing.T) {
 	targetSz := 64
-	shape := DistribArrayShape{caps: []int{targetSz, targetSz}, lens: []int{0, 0}}
+	shape := CreateShapeUniform(targetSz, 2)
 
 	rand.Seed(0)
 
-	tmpDir, err := ioutil.TempDir("", "radixSortDataTest*")
+	tmpDir, err := ioutil.TempDir("", "radixSortDataTest")
 	require.Nilf(t, err, "Couldn't create temporary test directory")
-	// defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(tmpDir)
 
 	arrPath0 := filepath.Join(tmpDir, "testFileArr0")
 	arrPath1 := filepath.Join(tmpDir, "testFileArr1")
@@ -43,7 +43,8 @@ func TestFileDistribArr(t *testing.T) {
 	})
 
 	t.Run("MultipleArrays", func(t *testing.T) {
-		newShape := DistribArrayShape{caps: []int{targetSz, targetSz}, lens: []int{0, 0}}
+		newShape := CreateShapeUniform(targetSz, 2)
+
 		arr1, err := CreateFileDistribArray(arrPath1, newShape)
 		require.Nilf(t, err, "Failed to initialize array: %v", err)
 
@@ -64,7 +65,7 @@ func TestFileDistribArr(t *testing.T) {
 	})
 
 	t.Run("Destroy", func(t *testing.T) {
-		newShape := DistribArrayShape{caps: []int{targetSz, targetSz, targetSz}, lens: []int{0, 0, 0}}
+		newShape := CreateShapeUniform(targetSz, 3)
 
 		reArr0, err := OpenFileDistribArray(arrPath0)
 		require.Nilf(t, err, "Failed to reopen testFileArr0")
@@ -83,4 +84,8 @@ func TestFileDistribArr(t *testing.T) {
 		require.Nil(t, err, "Failed to recreate array after destroy")
 	})
 
+}
+
+func TestFileFactory(t *testing.T) {
+	testArrayFactory(t, FileArrayFactory)
 }

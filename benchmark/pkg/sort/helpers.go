@@ -32,13 +32,13 @@ const (
 // Iterate a list of arrays by bucket (every array's part 0 then every array's
 // part 1). Implements io.Reader.
 type BucketReader struct {
-	arrs  []data.DistribArray
-	parts [][]data.DistribPart
-	arrX  int // Index of next array to read from
-	partX int // Index of next partition (bucket) to read from
-	dataX int // Index of next address within the partition to read from
-	nArr  int // Number of arrays
-	nPart int // Number of partitions (should be fixed for each array)
+	arrs   []data.DistribArray
+	shapes []*data.DistribArrayShape
+	arrX   int // Index of next array to read from
+	partX  int // Index of next partition (bucket) to read from
+	dataX  int // Index of next address within the partition to read from
+	nArr   int // Number of arrays
+	nPart  int // Number of partitions (should be fixed for each array)
 
 	incIdx func() bool // Function to increment the index while iterating (modifies arrX and partX)
 }
@@ -46,17 +46,16 @@ type BucketReader struct {
 func NewBucketReader(sources []data.DistribArray, order ReadOrder) (*BucketReader, error) {
 	var err error
 
-	parts := make([][]data.DistribPart, len(sources))
-	for i, arr := range sources {
-		parts[i], err = arr.GetParts()
-		if err != nil {
+	shapes := make([]*data.DistribArrayShape, len(sources))
+	for i := 0; i < len(sources); i++ {
+		if shapes[i], err = sources[i].GetShape(); err != nil {
 			return nil, err
 		}
 	}
 
-	reader := &BucketReader{arrs: sources, parts: parts,
+	reader := &BucketReader{arrs: sources, shapes: shapes,
 		arrX: 0, partX: 0,
-		nArr: len(sources), nPart: len(parts[0]),
+		nArr: len(sources), nPart: shapes[0].NPart(),
 	}
 
 	if order == INORDER {
@@ -100,11 +99,7 @@ func (self *BucketReader) ReadRef(sz int) ([]*data.PartRef, error) {
 	nNeeded := sz
 
 	for done := false; !done; done = self.incIdx() {
-		part := self.parts[self.arrX][self.partX]
-		partLen, err := part.Len()
-		if err != nil {
-			return nil, errors.Wrapf(err, "Couldn't determine length of input %v:%v", self.arrX, self.partX)
-		}
+		partLen := self.shapes[self.arrX].Len(self.partX)
 
 		for self.dataX < partLen {
 			nRemaining := partLen - self.dataX
@@ -133,14 +128,11 @@ func (self *BucketReader) Read(out []byte) (n int, err error) {
 	outX := 0
 
 	for done := false; !done; done = self.incIdx() {
-		part := self.parts[self.arrX][self.partX]
-		partLen, err := part.Len()
-		if err != nil {
-			return 0, errors.Wrapf(err, "Couldn't determine length of input %v:%v", self.arrX, self.partX)
-		}
+		partLen := self.shapes[self.arrX].Len(self.partX)
 
+		arr := self.arrs[self.arrX]
 		for self.dataX < partLen {
-			reader, err := part.GetRangeReader(self.dataX, 0)
+			reader, err := arr.GetPartRangeReader(self.partX, self.dataX, 0)
 			if err != nil {
 				return outX, errors.Wrapf(err, "Couldnt read input %v:%v", self.arrX, self.partX)
 			}
@@ -191,29 +183,13 @@ func CheckSort(orig []byte, new []byte) error {
 		return errors.Wrap(err, "Couldn't interpret new")
 	}
 
-	sort.Slice(intOrig, func(i, j int) bool { return intOrig[i] < intOrig[j] })
-	sort.Slice(intNew, func(i, j int) bool { return intNew[i] < intNew[j] })
-	for i := 0; i < len(intOrig); i++ {
-		if intOrig[i] != intNew[i] {
-			// fmt.Println("Orig:")
-			// PrintHex(intOrig)
-			// fmt.Println("New:")
-			// PrintHex(intNew)
-			return fmt.Errorf("Response doesn't match reference at %v\n: Expected %v, Got %v\n", i, intOrig[i], intNew[i])
+	intOrigCpy := make([]uint32, len(intOrig))
+	copy(intOrigCpy, intOrig)
+	sort.Slice(intOrigCpy, func(i, j int) bool { return intOrigCpy[i] < intOrigCpy[j] })
+	for i := 0; i < len(intOrigCpy); i++ {
+		if intOrigCpy[i] != intNew[i] {
+			return fmt.Errorf("Response doesn't match reference at %v\n: Expected %v, Got %v\n", i, intOrigCpy[i], intNew[i])
 		}
 	}
-
-	// intOrigCpy := make([]uint32, len(intOrig))
-	// copy(intOrigCpy, intOrig)
-	// sort.Slice(intOrigCpy, func(i, j int) bool { return intOrigCpy[i] < intOrigCpy[j] })
-	// for i := 0; i < len(intOrigCpy); i++ {
-	// 	if intOrigCpy[i] != intNew[i] {
-	// 		fmt.Println("Orig:")
-	// 		PrintHex(intOrigCpy)
-	// 		fmt.Println("New:")
-	// 		PrintHex(intNew)
-	// 		return fmt.Errorf("Response doesn't match reference at %v\n: Expected %v, Got %v\n", i, intOrigCpy[i], intNew[i])
-	// 	}
-	// }
 	return nil
 }

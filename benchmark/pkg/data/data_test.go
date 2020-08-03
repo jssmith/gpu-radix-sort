@@ -106,3 +106,17 @@ func checkArr(t *testing.T, arr DistribArray, ref []byte) {
 		}
 	}
 }
+
+func testArrayFactory(t *testing.T, fact *ArrayFactory) {
+	targetSz := 16
+	shape := CreateShapeUniform(targetSz, 2)
+
+	arr, err := fact.Create("testFactory0", shape)
+	require.Nil(t, err, "Failed to create array from factory")
+	arr.Close()
+
+	openArr, err := fact.Open("testFactory0")
+	require.Nil(t, err, "Failed to open array from factory")
+
+	openArr.Destroy()
+}

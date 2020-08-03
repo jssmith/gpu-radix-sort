@@ -5,6 +5,18 @@ import (
 	"io"
 )
 
+var MemArrayFactory *ArrayFactory = &ArrayFactory{
+	Create: func(name string, shape DistribArrayShape) (DistribArray, error) {
+		a, err := CreateMemDistribArray(name, shape)
+		return (DistribArray)(a), err
+	},
+
+	Open: func(name string) (DistribArray, error) {
+		a, err := OpenMemDistribArray(name)
+		return (DistribArray)(a), err
+	},
+}
+
 // A place to store MemDistribArray data in between create and close calls.
 var memArrBacking map[string]*MemDistribArray = map[string]*MemDistribArray{}
 
@@ -128,5 +140,6 @@ func (self *MemDistribArray) Close() error {
 
 func (self *MemDistribArray) Destroy() error {
 	delete(memArrBacking, self.name)
+	self.parts = nil
 	return nil
 }

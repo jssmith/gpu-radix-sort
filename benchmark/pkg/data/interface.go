@@ -10,6 +10,27 @@ type DistribArrayShape struct {
 	caps []int // Current capacity of each partition a zero capcity indicates unlimited
 }
 
+// Create a DistribArrayShape with the provided capacities
+func CreateShape(caps []int) DistribArrayShape {
+	npart := len(caps)
+	shapeCaps := make([]int, npart)
+	shapeLens := make([]int, npart)
+
+	copy(shapeCaps, caps)
+	return DistribArrayShape{caps: shapeCaps, lens: shapeLens}
+}
+
+// Create a DistribArrayShape with npart partitions and all capacities set to 'cap'.
+func CreateShapeUniform(cap int, npart int) DistribArrayShape {
+	caps := make([]int, npart)
+	for i := 0; i < npart; i++ {
+		caps[i] = cap
+	}
+	lens := make([]int, npart)
+
+	return DistribArrayShape{caps: caps, lens: lens}
+}
+
 // DistribArrayShapes are immutable so we abstract access
 func (self *DistribArrayShape) Len(partIdx int) int {
 	return self.lens[partIdx]
@@ -64,6 +85,7 @@ type PartRef struct {
 	NByte   int          // Number of bytes to read
 }
 
-// A generic interface to creating new DistribArrays, users must provide their
-// own implementations of this.
-// type ArrayFactory func(name string, nbucket int) (DistribArray, error)
+type ArrayFactory struct {
+	Create func(name string, shape DistribArrayShape) (DistribArray, error)
+	Open   func(name string) (DistribArray, error)
+}

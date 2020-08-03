@@ -3,6 +3,7 @@
 #include <string.h>
 
 #define MAX_BLOCK_SZ 128
+/* #define MAX_BLOCK_SZ 256 */
 
 // Return bits val[pos:width)
 #define group_bits(val, pos, width) ((val >> pos) & ((1 << width) - 1));
@@ -344,10 +345,30 @@ void SortState::Step(int offset, int width) {
     }
 }
  
+// A fallback CPU-only boundary detection
+/* void SortState::GetBoundaries(unsigned int *boundaries, int offset, int width) { */
+/*     auto out = new unsigned int[data_len]; */
+/*     checkCudaErrors(cudaMemcpy(out, d_in, sizeof(unsigned int) * data_len, cudaMemcpyDeviceToHost)); */
+/*  */
+/*     boundaries[0] = 0; */
+/*     unsigned int curGroup = 0; */
+/*     for(unsigned int i = 1; i < data_len; i++) { */
+/*       unsigned int bits = group_bits(out[i], offset, width); */
+/*       if(bits != curGroup) { */
+/*         for(unsigned int j = 1; j <= (bits - curGroup); j++) { */
+/*             boundaries[curGroup + j] = i; */
+/*         } */
+/*         curGroup = bits; */
+/*       } */
+/*     } */
+/*     delete[] out; */
+/* } */
+
 void SortState::GetBoundaries(unsigned int *boundaries, int offset, int width) {
     int nboundary = (1 << width);
     unsigned int *d_boundaries;
     checkCudaErrors(cudaMalloc(&d_boundaries, nboundary*sizeof(unsigned int)));
+    checkCudaErrors(cudaMemset(d_boundaries, 0, nboundary*sizeof(unsigned int)));
 
     gpu_groups<<<grid_sz, block_sz>>>(d_boundaries, d_in, offset, width, data_len);
 

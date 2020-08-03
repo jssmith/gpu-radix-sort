@@ -2,10 +2,10 @@ package sort
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/nathantp/gpu-radix-sort/benchmark/pkg/data"
@@ -26,13 +26,11 @@ func TestLocalDistribWorker(t *testing.T) {
 	origRaw, err := GenerateInputs((uint64)(nElem))
 	require.Nil(t, err, "Failed to generate test inputs")
 
-	origArr, err := data.NewMemDistribArray(1)
+	shape := data.CreateShapeUniform(nByte, 1)
+	origArr, err := data.CreateMemDistribArray("testLocalDistribWorker", shape)
 	require.Nil(t, err)
 
-	parts, err := origArr.GetParts()
-	require.Nil(t, err)
-
-	writer, err := parts[0].GetWriter()
+	writer, err := origArr.GetPartWriter(0)
 	require.Nil(t, err, "Failed to get writer")
 
 	n, err := writer.Write(origRaw)
@@ -43,29 +41,26 @@ func TestLocalDistribWorker(t *testing.T) {
 	PartRefs := []*data.PartRef{&data.PartRef{Arr: origArr, PartIdx: 0, Start: 0, NByte: (nElem / 2) * 4},
 		&data.PartRef{Arr: origArr, PartIdx: 0, Start: (nElem / 2) * 4, NByte: (nElem - (nElem / 2)) * 4}}
 
-	outArr, err := LocalDistribWorker(PartRefs, 0, width, func(name string, nbucket int) (data.DistribArray, error) {
-		return data.NewMemDistribArray(nbucket)
-	})
+	outArr, err := LocalDistribWorker(PartRefs, 0, width, "testLocalDistribWorker", data.MemArrayFactory)
 	require.Nil(t, err)
 
-	outParts, err := outArr.GetParts()
-	require.Nil(t, err)
-	require.Equal(t, npart, len(outParts), "Did not return the right number of output partitions")
+	outShape, err := outArr.GetShape()
+	require.Nil(t, err, "Failed to get output array shape")
+	require.Equal(t, npart, outShape.NPart(), "Output array has wrong number of partitions")
 
 	outRaw := make([]byte, nByte)
 	boundaries := make([]uint64, npart)
 	totalLen := 0
 
-	for i, p := range outParts {
-		partLen, err := p.Len()
-		require.Nilf(t, err, "Failed to determine length of output partition %v", i)
+	for i := 0; i < outShape.NPart(); i++ {
+		partLen := outShape.Len(i)
 
 		boundaries[i] = (uint64)(totalLen)
 
 		totalLen += partLen
 		require.LessOrEqual(t, totalLen, nByte, "Too much data returned")
 
-		reader, err := p.GetReader()
+		reader, err := outArr.GetPartReader(i)
 		require.Nilf(t, err, "Failed to get reader for output partition %v", i)
 
 		n, err = reader.Read(outRaw[boundaries[i]:totalLen])
@@ -85,28 +80,26 @@ func TestLocalDistribWorker(t *testing.T) {
 // elements per partition. The value in each partition will be (partId << 4 |
 // arrId). This means that a strided access will be in-order (mimicking the
 // output of a radix sort). narr and npart must be < 16.
-func generateArrs(t *testing.T, narr, npart, elemPerPart int) []data.DistribArray {
+func generateArrs(t *testing.T, narr int, baseName string,
+	factory *data.ArrayFactory, shape data.DistribArrayShape) []data.DistribArray {
 	var err error
 
 	arrs := make([]data.DistribArray, narr)
 	for arrX := 0; arrX < narr; arrX++ {
-		arrs[arrX], err = data.NewMemDistribArray(npart)
+		arrs[arrX], err = factory.Create(fmt.Sprintf("%v_%v", baseName, arrX), shape)
 		require.Nilf(t, err, "Failed to build array %v", arrX)
 
-		parts, err := arrs[arrX].GetParts()
-		require.Nilf(t, err, "Failed to get parts from array %v", arrX)
-
-		for partX := 0; partX < npart; partX++ {
+		for partX := 0; partX < shape.NPart(); partX++ {
 			// Total data will be ordered by partition ID first, then by array
 			// (the strided access by the generator should produce in-order
 			// data)
-			partRaw := bytes.Repeat([]byte{(byte)((partX << 4) | arrX)}, elemPerPart)
+			partRaw := bytes.Repeat([]byte{(byte)((partX << 4) | arrX)}, shape.Cap(partX))
 
-			writer, err := parts[partX].GetWriter()
+			writer, err := arrs[arrX].GetPartWriter(partX)
 			require.Nilf(t, err, "Failed to get writer for output %v:%v", arrX, partX)
 
 			n, err := writer.Write(partRaw)
-			require.Equal(t, elemPerPart, n, "Didn't write enough to initial data")
+			require.Equal(t, shape.Cap(partX), n, "Didn't write enough to initial data")
 			require.Nil(t, err, "Failed to write initial data")
 			writer.Close()
 		}
@@ -115,11 +108,12 @@ func generateArrs(t *testing.T, narr, npart, elemPerPart int) []data.DistribArra
 	return arrs
 }
 
-func testBucketReader(t *testing.T, order ReadOrder) {
+func testBucketReader(t *testing.T, order ReadOrder, baseName string) {
 	narr := 2
 	npart := 2
 	elemPerPart := 256
 	nElem := narr * npart * elemPerPart
+	shape := data.CreateShapeUniform(elemPerPart, npart)
 
 	// Given the global 'index' of 'value' taken from an array list returned by
 	// generateArrs, ensures that the value is correct for that index.
@@ -157,7 +151,7 @@ func testBucketReader(t *testing.T, order ReadOrder) {
 			require.Equal(t, expectArrId, outArrId, "Arrays out of order")
 		}
 	}
-	arrs := generateArrs(t, narr, npart, elemPerPart)
+	arrs := generateArrs(t, narr, baseName+"_testBucketReader", data.MemArrayFactory, shape)
 
 	t.Run("All", func(t *testing.T) {
 		iter, err := NewBucketReader(arrs, order)
@@ -213,11 +207,11 @@ func testBucketReader(t *testing.T, order ReadOrder) {
 }
 
 func TestBucketReaderStrided(t *testing.T) {
-	testBucketReader(t, STRIDED)
+	testBucketReader(t, STRIDED, "strided")
 }
 
 func TestBucketReaderInOrder(t *testing.T) {
-	testBucketReader(t, INORDER)
+	testBucketReader(t, INORDER, "inorder")
 }
 
 // We only test STRIDED access for reading ref's because the traversal logic is
@@ -227,8 +221,9 @@ func TestBucketReaderRef(t *testing.T) {
 	npart := 2
 	elemPerPart := 256
 	nElem := narr * npart * elemPerPart
+	shape := data.CreateShapeUniform(elemPerPart, npart)
 
-	arrs := generateArrs(t, narr, npart, elemPerPart)
+	arrs := generateArrs(t, narr, "testBucketReaderRef", data.MemArrayFactory, shape)
 
 	t.Run("Aligned", func(t *testing.T) {
 		g, err := NewBucketReader(arrs, STRIDED)
@@ -270,10 +265,7 @@ func TestBucketReaderRef(t *testing.T) {
 			for refX, ref := range refs {
 				inputSz += (int)(ref.NByte)
 
-				refParts, err := ref.Arr.GetParts()
-				require.Nilf(t, err, "Input %v:%v: failed to read partitions", inX, refX)
-
-				reader, err := refParts[ref.PartIdx].GetRangeReader(ref.Start, ref.Start+ref.NByte)
+				reader, err := ref.Arr.GetPartRangeReader(ref.PartIdx, ref.Start, ref.Start+ref.NByte)
 				require.Nilf(t, err, "Failed to get reader for %vth reference", refX)
 
 				refRaw, err := ioutil.ReadAll(reader)
@@ -303,7 +295,7 @@ func TestBucketReaderRef(t *testing.T) {
 
 }
 
-func sortDistribTest(t *testing.T, factory data.ArrayFactory, worker DistribWorker) {
+func sortDistribTest(t *testing.T, baseName string, factory *data.ArrayFactory, worker DistribWorker) {
 	var err error
 
 	err = InitLibSort()
@@ -316,7 +308,7 @@ func sortDistribTest(t *testing.T, factory data.ArrayFactory, worker DistribWork
 	origRaw, err := GenerateInputs((uint64)(nElem))
 	require.Nil(t, err, "Failed to generate test inputs")
 
-	outRaw, err := SortDistribFromRaw(origRaw, factory, worker)
+	outRaw, err := SortDistribFromRaw(origRaw, baseName, factory, worker)
 	require.Nil(t, err, "Sort Error")
 
 	err = CheckSort(origRaw, outRaw)
@@ -324,11 +316,7 @@ func sortDistribTest(t *testing.T, factory data.ArrayFactory, worker DistribWork
 }
 
 func TestSortMemDistrib(t *testing.T) {
-	sortDistribTest(t, func(name string, nbucket int) (data.DistribArray, error) {
-		var arr data.DistribArray
-		arr, err := data.NewMemDistribArray(nbucket)
-		return arr, err
-	}, LocalDistribWorker)
+	sortDistribTest(t, "TestSortMemDistrib", data.MemArrayFactory, LocalDistribWorker)
 }
 
 func TestSortFileDistrib(t *testing.T) {
@@ -336,9 +324,5 @@ func TestSortFileDistrib(t *testing.T) {
 	require.Nilf(t, err, "Couldn't create temporary test directory")
 	defer os.RemoveAll(tmpDir)
 
-	sortDistribTest(t, func(name string, nbucket int) (data.DistribArray, error) {
-		var arr data.DistribArray
-		arr, err := data.NewFileDistribArray(filepath.Join(tmpDir, name), nbucket)
-		return arr, err
-	}, LocalDistribWorker)
+	sortDistribTest(t, tmpDir+"/", data.FileArrayFactory, LocalDistribWorker)
 }

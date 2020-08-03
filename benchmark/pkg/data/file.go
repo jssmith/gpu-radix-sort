@@ -10,6 +10,18 @@ import (
 	"github.com/pkg/errors"
 )
 
+var FileArrayFactory *ArrayFactory = &ArrayFactory{
+	Create: func(name string, shape DistribArrayShape) (DistribArray, error) {
+		a, err := CreateFileDistribArray(name, shape)
+		return (DistribArray)(a), err
+	},
+
+	Open: func(name string) (DistribArray, error) {
+		a, err := OpenFileDistribArray(name)
+		return (DistribArray)(a), err
+	},
+}
+
 // Stores a distributed array in the filesystem (in the directory at RootPath).
 // There are two files:
 //		meta.dat: stores metadata about the array. First 'lens', then 'caps'
