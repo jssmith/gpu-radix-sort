@@ -110,7 +110,7 @@ func generateArrs(t *testing.T, narr int, baseName string,
 
 func testBucketReader(t *testing.T, order ReadOrder, baseName string) {
 	narr := 2
-	npart := 2
+	npart := 16
 	elemPerPart := 256
 	nElem := narr * npart * elemPerPart
 	shape := data.CreateShapeUniform(elemPerPart, npart)
@@ -124,10 +124,12 @@ func testBucketReader(t *testing.T, order ReadOrder, baseName string) {
 			outPartId := (int)(value >> 4)
 
 			globalPart := index / elemPerPart
-			expectPartId := globalPart / narr
-			expectArrId := globalPart % npart
 
-			// t.Logf("Checking %v: 0x%04v", index, value)
+			// the input generator can only encode the first 4b of part/arr ids
+			expectPartId := (globalPart / narr) & 0xf
+			expectArrId := (globalPart % narr) & 0xf
+
+			// t.Logf("Checking %v: 0x%04x", index, value)
 			// t.Logf("Expecting %v:%v", expectArrId, expectPartId)
 			// t.Logf("Got %v:%v", outArrId, outPartId)
 
@@ -140,10 +142,12 @@ func testBucketReader(t *testing.T, order ReadOrder, baseName string) {
 			outPartId := (int)(value >> 4)
 
 			globalPart := index / elemPerPart
-			expectPartId := globalPart % narr
-			expectArrId := globalPart / npart
 
-			// t.Logf("Checking %v: 0x%04v", index, value)
+			// the input generator can only encode the first 4b of part/arr ids
+			expectPartId := (globalPart % npart) & 0xf
+			expectArrId := (globalPart / npart) & 0xf
+
+			// t.Logf("Checking %v: 0x%04x", index, value)
 			// t.Logf("Expecting %v:%v", expectArrId, expectPartId)
 			// t.Logf("Got %v:%v", outArrId, outPartId)
 
@@ -320,7 +324,7 @@ func TestSortMemDistrib(t *testing.T) {
 }
 
 func TestSortFileDistrib(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "radixSortLocalTest*")
+	tmpDir, err := ioutil.TempDir("", "radixSortLocalTest")
 	require.Nilf(t, err, "Couldn't create temporary test directory")
 	defer os.RemoveAll(tmpDir)
 
