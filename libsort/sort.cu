@@ -378,11 +378,19 @@ void SortState::GetBoundaries(unsigned int *boundaries, int offset, int width) {
     // Empty groups can't be detected by gpu_groups() so we have to fill them
     // in here. nboundaries is assumed to be small so not worth using the GPU
     // for.
-    for(int group = 1; group < nboundary; group++) {
+    int prev = data_len;
+    for(int group = nboundary - 1; group > 1; group--) {
       if(boundaries[group] == 0) {
-        boundaries[group] = boundaries[group - 1];
+        boundaries[group] = prev;
       }
+      prev = boundaries[group];
     }
+
+    /* for(int group = 1; group < nboundary; group++) { */
+    /*   if(boundaries[group] == 0) { */
+    /*     boundaries[group] = boundaries[group - 1]; */
+    /*   } */
+    /* } */
 }
 
 void SortState::GetResult(unsigned int *out) {
