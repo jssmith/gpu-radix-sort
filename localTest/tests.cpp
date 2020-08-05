@@ -1,6 +1,6 @@
 #include "local.h"
 
-#define DISTRIB_STEP_WIDTH 4
+#define DISTRIB_STEP_WIDTH 8
 #define DISTRIB_NBUCKET (1 << DISTRIB_STEP_WIDTH)
 #define DISTRIB_NSTEP (32 / DISTRIB_STEP_WIDTH)
 
@@ -46,13 +46,12 @@ bool testGpuPartial(uint32_t *data, size_t len)
     radixCounts[radix]++;
   }
 
-  uint32_t prev = 0;
-  for(int i = 0; i < DISTRIB_NBUCKET; i++) {
-    refBounds[i] = prev;
-    prev += radixCounts[i];
+  uint32_t sum = len;
+  refBounds[DISTRIB_NBUCKET] = sum;
+  for(int i = DISTRIB_NBUCKET - 1; i > 0; i--) {
+    sum -= radixCounts[i];
+    refBounds[i] = sum;
   }
-  // makes checking loops simpler
-  refBounds[DISTRIB_NBUCKET] = len;
 
   if(!gpuPartial(data, testBounds, len, 0, DISTRIB_STEP_WIDTH)) {
     fprintf(stderr, "gpuPartial call failed\n");
@@ -73,7 +72,7 @@ bool testGpuPartial(uint32_t *data, size_t len)
   for(size_t i = 0; i < len; i++) {
     uint32_t testRadix = group_bits(data[i], 0, DISTRIB_STEP_WIDTH);
 
-    if(i == refBounds[refRadix+1]) {
+    while(i == refBounds[refRadix+1]) {
       refRadix++;
     }
 
