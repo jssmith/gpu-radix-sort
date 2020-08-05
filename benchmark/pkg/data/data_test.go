@@ -30,6 +30,9 @@ func testPartRangeReader(t *testing.T, arr DistribArray, ref []byte, start int, 
 	require.Equalf(t, io.EOF, err, "Didn't return EOF")
 	require.Equalf(t, readLen, n, "Didn't read enough values")
 	require.Truef(t, bytes.Equal(out[:readLen], ref[start:realStop]), "Returned wrong values: expected %v, got %v", ref, out)
+
+	err = reader.Close()
+	require.Nilf(t, err, "Failed to close reader")
 }
 
 // A very pedantic read procedure with lots of checking. Most people will just use ioutil.ReadFull.

@@ -1,6 +1,7 @@
 package data
 
 import (
+	"fmt"
 	"io"
 )
 
@@ -42,6 +43,22 @@ func (self *DistribArrayShape) Cap(partIdx int) int {
 
 func (self *DistribArrayShape) NPart() int {
 	return len(self.caps)
+}
+
+func (self *DistribArrayShape) ToString() string {
+	var lenStr string
+	var capStr string
+	//XXX
+	// for i := 0; i < len(self.caps); i++ {
+	for i := 0; i < 10; i++ {
+		capStr += fmt.Sprintf("%v:%v\n", i, self.caps[i])
+		lenStr += fmt.Sprintf("%v:%v\n", i, self.lens[i])
+	}
+
+	var s string
+	s += fmt.Sprintf("Lens: %v\n", lenStr)
+	s += fmt.Sprintf("Caps: %v\n", capStr)
+	return s
 }
 
 // Represents an array of bytes that is suitable for a distributed sort.

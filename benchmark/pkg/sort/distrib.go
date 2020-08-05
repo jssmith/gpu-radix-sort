@@ -40,7 +40,7 @@ type DistribWorker func(inBkts []*data.PartRef, offset int, width int, baseName 
 //
 // 		// Generate output array on host side to avoid permissions errors from Docker
 // 		shape := data.CreateShape
-// 		outArr, err := factory.Create(baseName+".output", nBucket)
+// 		outArr, err := factory.Create(baseName+"_output", nBucket)
 // 		if err != nil {
 // 			return nil, errors.Wrap(err, "Could not allocate output")
 // 		}
@@ -99,7 +99,7 @@ func LocalDistribWorker(inBkts []*data.PartRef, offset int, width int, baseName 
 	shape := data.CreateShape(partSzs)
 
 	// Write Outputs
-	outArr, err := factory.Create(baseName+".output", shape)
+	outArr, err := factory.Create(baseName+"_output", shape)
 	if err != nil {
 		return nil, errors.Wrap(err, "Could not allocate output")
 	}
@@ -149,9 +149,10 @@ func SortDistribFromArr(arr data.DistribArray, sz int, baseName string,
 	//	   always exist.
 	//	 - Input distribArrays may be garbage collected after every worker has
 	//     provided their output (output distribArrays are copies, not references).
-	// nworker := 2 //number of workers (degree of parallelism)
-	nworker := 1 //number of workers (degree of parallelism)
-	width := 8   //number of bits to sort per round
+	nworker := 2 //number of workers (degree of parallelism)
+	// nworker := 1 //number of workers (degree of parallelism)
+	// width := 4 //number of bits to sort per round
+	width := 8 //number of bits to sort per round
 	// width := 16           //number of bits to sort per round
 	nstep := (32 / width) // number of steps needed to fully sort
 
@@ -171,6 +172,7 @@ func SortDistribFromArr(arr data.DistribArray, sz int, baseName string,
 		// resident memory size for MemDistribArrays in the big test (13 vs
 		// 19). It likely would have little effect on other sorts of
 		// DistribArrays and has little/no performance benefit.
+		// XXX after the refactor, how important is this? Should I just put it in MemDistribArray.Destroy()?
 		runtime.GC()
 
 		inGen, err := NewBucketReader(inputs, STRIDED)
@@ -193,7 +195,7 @@ func SortDistribFromArr(arr data.DistribArray, sz int, baseName string,
 			go func(id int, inputs []*data.PartRef) {
 				defer wg.Done()
 
-				workerName := fmt.Sprintf("%v.step%v.worker%v", baseName, step, id)
+				workerName := fmt.Sprintf("%v_step%v_worker%v", baseName, step, id)
 
 				outputs[id], err = worker(inputs, step*width, width, workerName, factory)
 
@@ -226,7 +228,7 @@ func SortDistribFromRaw(inRaw []byte, baseName string,
 	}
 
 	shape := data.CreateShapeUniform(len(inRaw), 1)
-	origArr, err := factory.Create(baseName+".input", shape)
+	origArr, err := factory.Create(baseName+"_input", shape)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create input distribarray")
 	}

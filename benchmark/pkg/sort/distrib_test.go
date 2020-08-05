@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/nathantp/gpu-radix-sort/benchmark/pkg/data"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -108,24 +109,40 @@ func generateArrs(t *testing.T, narr int, baseName string,
 	return arrs
 }
 
-func testBucketReader(t *testing.T, order ReadOrder, baseName string) {
+func testBucketReader(t *testing.T, order ReadOrder,
+	arrReader func(*BucketReader, []byte) (int, error),
+	baseName string) {
+
 	narr := 2
 	npart := 16
+	// npart := 4
 	elemPerPart := 256
 	nElem := narr * npart * elemPerPart
-	shape := data.CreateShapeUniform(elemPerPart, npart)
+	uniformShape := data.CreateShapeUniform(elemPerPart, npart)
 
 	// Given the global 'index' of 'value' taken from an array list returned by
 	// generateArrs, ensures that the value is correct for that index.
-	var checker func(*testing.T, int, byte)
+	var checker func(*testing.T, int, byte, data.DistribArrayShape)
 	if order == STRIDED {
-		checker = func(t *testing.T, index int, value byte) {
-			outArrId := (int)(value & 0xf)
-			outPartId := (int)(value >> 4)
-
-			globalPart := index / elemPerPart
+		checker = func(t *testing.T, index int, value byte, shape data.DistribArrayShape) {
+			globalPart := 0
+			sum := 0
+		partCalc:
+			for partX := 0; partX < shape.NPart(); partX++ {
+				for arrX := 0; arrX < narr; arrX++ {
+					sum += shape.Cap(partX)
+					// t.Logf("Shape %v:%v: %v", shape.Cap(partX), arrX, partX, sum)
+					if sum >= index+1 {
+						// t.Logf("idx=%v, [%v:%v]->%v", index, arrX, partX, globalPart)
+						break partCalc
+					}
+					globalPart++
+				}
+			}
 
 			// the input generator can only encode the first 4b of part/arr ids
+			outArrId := (int)(value & 0xf)
+			outPartId := (int)(value >> 4)
 			expectPartId := (globalPart / narr) & 0xf
 			expectArrId := (globalPart % narr) & 0xf
 
@@ -137,11 +154,26 @@ func testBucketReader(t *testing.T, order ReadOrder, baseName string) {
 			require.Equal(t, expectArrId, outArrId, "Arrays out of order")
 		}
 	} else {
-		checker = func(t *testing.T, index int, value byte) {
+		//INORDER
+
+		checker = func(t *testing.T, index int, value byte, shape data.DistribArrayShape) {
 			outArrId := (int)(value & 0xf)
 			outPartId := (int)(value >> 4)
 
-			globalPart := index / elemPerPart
+			globalPart := 0
+			sum := 0
+		partCalc:
+			for arrX := 0; arrX < narr; arrX++ {
+				for partX := 0; partX < shape.NPart(); partX++ {
+					sum += shape.Cap(partX)
+					// t.Logf("Shape %v:%v: %v", arrX, partX, sum)
+					if sum >= index+1 {
+						// t.Logf("idx=%v, [%v:%v]->%v", index, arrX, partX, globalPart)
+						break partCalc
+					}
+					globalPart++
+				}
+			}
 
 			// the input generator can only encode the first 4b of part/arr ids
 			expectPartId := (globalPart % npart) & 0xf
@@ -151,26 +183,28 @@ func testBucketReader(t *testing.T, order ReadOrder, baseName string) {
 			// t.Logf("Expecting %v:%v", expectArrId, expectPartId)
 			// t.Logf("Got %v:%v", outArrId, outPartId)
 
-			require.Equal(t, expectPartId, outPartId, "Partitions out of order")
-			require.Equal(t, expectArrId, outArrId, "Arrays out of order")
+			require.Equalf(t, expectPartId, outPartId, "Partitions out of order at %v", index)
+			require.Equal(t, expectArrId, outArrId, "Arrays out of order at %v", index)
 		}
 	}
-	arrs := generateArrs(t, narr, baseName+"_testBucketReader", data.MemArrayFactory, shape)
+	fullArrs := generateArrs(t, narr, baseName+"_testBucketReader", data.MemArrayFactory, uniformShape)
 
 	t.Run("All", func(t *testing.T) {
-		iter, err := NewBucketReader(arrs, order)
+		iter, err := NewBucketReader(fullArrs, order)
+		require.Nil(t, err, "Couldn't create reader")
 
-		out, err := ioutil.ReadAll(iter)
+		out := make([]byte, nElem)
+		n, err := arrReader(iter, out)
 		require.Nil(t, err, "Failed to read from iterator")
-		require.Equal(t, len(out), nElem, "Iterator returned wrong number of bytes")
+		require.Equal(t, nElem, n, "Didn't read enough")
 
 		for i, v := range out {
-			checker(t, i, v)
+			checker(t, i, v, uniformShape)
 		}
 	})
 
 	t.Run("Unaligned", func(t *testing.T) {
-		iter, err := NewBucketReader(arrs, order)
+		iter, err := NewBucketReader(fullArrs, order)
 		require.Nil(t, err, "Failed to create BucketReader")
 
 		// Read almost 1 partition per read, but not exact to prevent reads
@@ -178,7 +212,7 @@ func testBucketReader(t *testing.T, order ReadOrder, baseName string) {
 		readSz := elemPerPart - 1
 		out := make([]byte, readSz)
 		for i := 0; i < npart*narr; i++ {
-			n, err := iter.Read(out)
+			n, err := arrReader(iter, out)
 
 			if i != npart*narr {
 				require.Nil(t, err, "Error during %vth read", i)
@@ -203,19 +237,88 @@ func testBucketReader(t *testing.T, order ReadOrder, baseName string) {
 			}
 			for outX, v := range out {
 				globalIdx := i*readSz + outX
-				checker(t, globalIdx, v)
+				checker(t, globalIdx, v, uniformShape)
 			}
 		}
 	})
 
+	// Test with some partitions containing zero elements
+	t.Run("ZeroParts", func(t *testing.T) {
+		zeroRatio := 4
+		caps := make([]int, npart)
+		for i := 0; i < npart; i++ {
+			if i%zeroRatio == 0 {
+				caps[i] = elemPerPart
+			} else {
+				caps[i] = 0
+			}
+		}
+		zerosShape := data.CreateShape(caps)
+
+		zeroArrs := generateArrs(t, narr, baseName+"_testBucketReaderZero", data.MemArrayFactory, zerosShape)
+		iter, err := NewBucketReader(zeroArrs, order)
+
+		out := make([]byte, nElem/zeroRatio)
+		n, err := arrReader(iter, out)
+		require.Nil(t, err, "Failed to read from iterator")
+		require.Equal(t, n, nElem/zeroRatio, "Iterator returned wrong number of bytes")
+
+		for i, v := range out {
+			checker(t, i, v, zerosShape)
+		}
+
+		for i := 0; i < narr; i++ {
+			zeroArrs[i].Destroy()
+		}
+	})
+
+	for i := 0; i < narr; i++ {
+		fullArrs[i].Destroy()
+	}
+}
+
+func bucketRead(reader *BucketReader, out []byte) (int, error) {
+	var err error
+	var n int
+	for n = 0; n < len(out); {
+		nCur, err := reader.Read(out[n:])
+		if err != nil {
+			return n, err
+		}
+		n += nCur
+	}
+	return n, err
+}
+
+func bucketReadRef(reader *BucketReader, out []byte) (int, error) {
+	refs, err := reader.ReadRef(len(out))
+	if err != nil {
+		return 0, err
+	}
+
+	inBytes, err := data.FetchPartRefs(refs)
+	if err != nil {
+		return 0, errors.Wrap(err, "Couldn't read input references")
+	}
+
+	copy(out, inBytes)
+	return len(out), nil
 }
 
 func TestBucketReaderStrided(t *testing.T) {
-	testBucketReader(t, STRIDED, "strided")
+	testBucketReader(t, STRIDED, bucketRead, "strided")
 }
 
 func TestBucketReaderInOrder(t *testing.T) {
-	testBucketReader(t, INORDER, "inorder")
+	testBucketReader(t, INORDER, bucketRead, "inorder")
+}
+
+func TestBucketRefReaderStrided(t *testing.T) {
+	testBucketReader(t, STRIDED, bucketReadRef, "stridedRef")
+}
+
+func TestBucketRefReaderInOrder(t *testing.T) {
+	testBucketReader(t, INORDER, bucketReadRef, "inorderRef")
 }
 
 // We only test STRIDED access for reading ref's because the traversal logic is
