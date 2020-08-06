@@ -211,6 +211,16 @@ func SortDistribFromArr(arr data.DistribArray, sz int, baseName string,
 			return nil, errors.Wrapf(firstErr, "Worker failure")
 		default:
 		}
+
+		var destroyErr error
+		for i := 0; i < len(inputs); i++ {
+			if err = inputs[i].Destroy(); err != nil {
+				destroyErr = err
+			}
+		}
+		if destroyErr != nil {
+			return nil, errors.Wrapf(err, "Failed to destroy one or more intermediate arrays")
+		}
 	}
 
 	return outputs, nil
@@ -271,6 +281,10 @@ func SortDistribFromRaw(inRaw []byte, baseName string,
 		if err = outArrs[i].Destroy(); err != nil {
 			destroyErr = err
 		}
+	}
+
+	if err = origArr.Destroy(); err != nil {
+		destroyErr = err
 	}
 
 	if destroyErr != nil {

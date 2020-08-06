@@ -54,7 +54,7 @@ func FilePartRefToFaas(ref *data.PartRef) (*FaasFilePartRef, error) {
 func LoadFaasFilePartRef(ref *FaasFilePartRef, localArrDir string) (*data.PartRef, error) {
 	localArrPath := filepath.Join(localArrDir, ref.ArrayName)
 
-	arr, err := data.NewFileDistribArrayExisting(localArrPath)
+	arr, err := data.OpenFileDistribArray(localArrPath)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to load referenced FileDistributedArray")
 	}

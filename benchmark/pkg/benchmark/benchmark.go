@@ -3,8 +3,6 @@ package benchmark
 import (
 	"io/ioutil"
 	"os"
-	"path/filepath"
-	"runtime"
 
 	"github.com/nathantp/gpu-radix-sort/benchmark/pkg/data"
 	"github.com/nathantp/gpu-radix-sort/benchmark/pkg/sort"
@@ -22,11 +20,7 @@ func BenchMemLocalDistrib(arr []byte, stats SortStats) error {
 	}
 
 	TTotal.Start()
-	_, err = sort.SortDistribFromRaw(arr, func(name string, nbucket int) (data.DistribArray, error) {
-		var arr data.DistribArray
-		arr, err := data.NewMemDistribArray(nbucket)
-		return arr, err
-	}, sort.LocalDistribWorker)
+	_, err = sort.SortDistribFromRaw(arr, "BenchMemLocalDistrib", data.MemArrayFactory, sort.LocalDistribWorker)
 	TTotal.Record()
 
 	if err != nil {
@@ -45,18 +39,14 @@ func BenchFileLocalDistrib(arr []byte, stats SortStats) error {
 		stats["TTotal"] = TTotal
 	}
 
-	tmpDir, err := ioutil.TempDir("", "radixSortLocalTest*")
+	tmpDir, err := ioutil.TempDir("", "benchFileLocalDistrib")
 	if err != nil {
 		return errors.Wrap(err, "Failed to create temporary directory")
 	}
 	defer os.RemoveAll(tmpDir)
 
 	TTotal.Start()
-	_, err = sort.SortDistribFromRaw(arr, func(name string, nbucket int) (data.DistribArray, error) {
-		var arr data.DistribArray
-		arr, err := data.NewFileDistribArray(filepath.Join(tmpDir, name), nbucket)
-		return arr, err
-	}, sort.LocalDistribWorker)
+	_, err = sort.SortDistribFromRaw(arr, tmpDir+"/", data.FileArrayFactory, sort.LocalDistribWorker)
 	TTotal.Record()
 
 	if err != nil {
@@ -72,7 +62,7 @@ func BenchFileLocalDistrib(arr []byte, stats SortStats) error {
 func RunBenchmarks() (map[string]SortStats, error) {
 	var err error
 
-	const nrepeat = 5
+	const nrepeat = 1
 	stats := make(map[string]SortStats)
 
 	// nElem := 1024 * 1024
@@ -84,23 +74,24 @@ func RunBenchmarks() (map[string]SortStats, error) {
 	}
 	iterIn := make([]byte, len(origRaw))
 
-	stats["MemLocalDistrib"] = make(SortStats)
-	for i := 0; i < nrepeat; i++ {
-		copy(iterIn, origRaw)
-		err = BenchMemLocalDistrib(iterIn, stats["MemLocalDistrib"])
-		if err != nil {
-			return stats, errors.Wrap(err, "Failed to benchmark MemLocalDistrib")
-		}
-		runtime.GC()
-	}
-
-	// stats["FileLocalDistrib"] = make(SortStats)
+	// stats["MemLocalDistrib"] = make(SortStats)
 	// for i := 0; i < nrepeat; i++ {
 	// 	copy(iterIn, origRaw)
-	// 	err = BenchFileLocalDistrib(iterIn, stats["FileLocalDistrib"])
+	// 	err = BenchMemLocalDistrib(iterIn, stats["MemLocalDistrib"])
 	// 	if err != nil {
 	// 		return stats, errors.Wrap(err, "Failed to benchmark MemLocalDistrib")
 	// 	}
+	// 	runtime.GC()
 	// }
+
+	stats["FileLocalDistrib"] = make(SortStats)
+	for i := 0; i < nrepeat; i++ {
+		copy(iterIn, origRaw)
+		err = BenchFileLocalDistrib(iterIn, stats["FileLocalDistrib"])
+		if err != nil {
+			return stats, errors.Wrap(err, "Failed to benchmark MemLocalDistrib")
+		}
+	}
+
 	return stats, nil
 }
