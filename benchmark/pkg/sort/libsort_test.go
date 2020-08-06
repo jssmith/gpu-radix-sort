@@ -107,16 +107,15 @@ func checkPartial(t *testing.T, testBytes []byte, boundaries []int64, origBytes 
 	// len(boundaries) is 2^radixWidth, -1 gives us ones for the first width bits
 	mask := (uint32)(len(boundaries) - 1)
 
-	// Start at uint32_max to detect bucket 0 (will roll over when we increment)
-	curBucket := ^(uint32)(0)
+	boundaries = append(boundaries, (int64)(len(testBytes)))
+	curBucket := (uint32)(0)
 	for i := 0; i < intLen; i++ {
-		bucket := test[i] & mask
-		if bucket != curBucket {
-			require.Equal(t, curBucket+1, bucket, "Buckets not in order")
-			require.Equalf(t, boundaries[bucket]/4, (int64)(i), "Boundary for end of bucket %v is wrong", i)
-
-			curBucket = bucket
+		for i == (int)(boundaries[curBucket+1])/4 {
+			curBucket++
 		}
+
+		bucket := test[i] & mask
+		require.Equal(t, curBucket, bucket, "Buckets not in order")
 	}
 
 	// Make sure all the right values are in the output, the sort here is just
@@ -138,7 +137,7 @@ func TestLocalPartial(t *testing.T) {
 
 	tLen := 1021
 	// tLen := 1024 * 1024
-	width := 4
+	width := 8
 	nbucket := 1 << width
 
 	test, err := GenerateInputs((uint64)(tLen))
