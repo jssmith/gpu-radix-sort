@@ -73,4 +73,5 @@ def sortPartial(buf: bytearray, offset, width):
     if not res:
         raise RuntimeError("Libsort had an internal error")
 
-    return list(boundaries)
+    # Add an extra boundary to make iteration easier
+    return list(boundaries) + [nElem * 4]

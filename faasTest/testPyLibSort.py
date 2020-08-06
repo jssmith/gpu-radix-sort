@@ -14,63 +14,84 @@ class testException(Exception):
         return('Test "{}" Failure: {}'.format(self.tname, self.msg))
 
 
-def fillPart(part, nbyte):
-    """Fill a partition with nbyte random numbers, returns the bytes object
-    used to fill"""
-    inBuf = bytes([random.getrandbits(8) for _ in range(nbyte)])
-    part.write(inBuf)
-    return inBuf
-
-
-def fillArr(arr, partNByte):
-    """Fill the partitions of an array with partNByte bytes. partNByte can be a
-    scalar (in which case all parts get the same size), or an iterable with one
-    entry per partition for heterogenous sizes."""
-    parts = arr.getParts()
-    npart = arr.nParts()
+def fillArr(arr, szs=None):
+    """Fill arr with random bytes. You may optionally provide a list of lengths
+    to partially fill the array."""
+    npart = arr.shape.npart
     inBufs = []
     
-    if not isinstance(partNByte, collections.abc.Iterable):
-        partNByte = [partNByte]*npart
+    if szs is None:
+        szs = arr.shape.caps
 
-    for part, nbyte in zip(parts, partNByte):
-        inBufs.append(fillPart(part, nbyte))
+    for partId in range(npart):
+        partBuf = bytes([random.getrandbits(8) for _ in range(szs[partId])])
+        arr.WritePart(partId, partBuf)
+        inBufs.append(partBuf)
 
     return inBufs
 
 
 def testFileDistribPart():
-    with tempfile.TemporaryDirectory() as aDir:
-        pname = pathlib.Path(aDir) / "p1.dat"
-        p = pylibsort.fileDistribPart(pname)
+    shape = pylibsort.ArrayShape.fromUniform(40, 2)
 
-        inBuf = fillPart(p, 20)
+    with tempfile.TemporaryDirectory() as tDir:
+        tDir = pathlib.Path(tDir)
+        arr = pylibsort.fileDistribArray.Create(tDir / "partTest0", shape=shape)
 
-        outBuf = p.read()
+        inBufs = fillArr(arr, szs=[20, 20])
+        inBuf = inBufs[0]
+
+        # Full Read
+        outBuf = arr.ReadPart(0)
         if outBuf != inBuf:
             raise testException("FileDistribPart", 
                     "Read returned wrong data. Expected {}, Got {}".format(inBuf.hex(), outBuf.hex()))
         
-        partialOutBuf = p.read(start=4, nbyte=4)
+        # Partial Read
+        partialOutBuf = arr.ReadPart(0, start=4, nbyte=4)
         if partialOutBuf != inBuf[4:8]:
             raise testException("FileDistribPart",
                     "Partial read returned wrong data. Expected {}, Got {}".format(inBuf[4:9].hex(), partialOutBuf.hex()))
 
-        appendBuf = fillPart(p, 20)
-        outAppend = p.read()
+
+        # Append
+        appendBufs = fillArr(arr, szs=[20, 20])
+        appendBuf = appendBufs[0]
+        outAppend = arr.ReadPart(0)
         if outAppend != inBuf + appendBuf:
             raise testException("FileDistribPart",
                     "Appended partition returned wrong data. Expected {}, Got {}".format(
                         (inBuf + appendBuf).hex(), outAppend.hex()))
 
+        # ReadAll
+        inFull = inBufs[0] + appendBufs[0] + inBufs[1] + appendBufs[1]
+        outFull = arr.ReadAll()
+        if outFull != inFull:
+            raise testException("FileDistribPart",
+                    "ReadAll returned wrong data. Expected {}, Got {}".format(
+                        (fullBuf).hex(), outFull.hex()))
 
-def checkParts(parts, inBufs, label):
-    for i in range(len(parts)):
-        outBuf = parts[i].read()
-        if outBuf != inBufs[i]:
+        # WriteAll
+        newArr = pylibsort.fileDistribArray.Create(tDir / "partTest1", shape)
+        newArr.WriteAll(outFull)
+        newOutFull = newArr.ReadAll()
+        if newOutFull != outFull:
+            raise testException("FileDistribPart",
+                    "WriteAll returned wrong data. Expected {}, Got {}".format(
+                        (outFull).hex(), newOutFull.hex()))
+
+
+def checkArr(arr, shape, inBufs, label):
+
+    if arr.shape.caps != shape.caps:
+        raise testException(label[0], label[1] + ": capacities don't match expected {}, got {}".format(shape.caps, arr.shape.caps))
+
+    for partId in range(arr.shape.npart):
+        outBuf = arr.ReadPart(partId)
+        if outBuf != inBufs[partId]:
             raise testException(label[0],
                     label[1] + ": part{} read returned wrong data. Expected {}, Got {}".format(
-                        i, inBufs[i].hex(), outBuf.hex()
+                        i, inBufs[partId].hex(), outBuf.hex()
                      )
                   )
 
@@ -78,32 +99,36 @@ def checkParts(parts, inBufs, label):
 def testFileDistribArray():
     nparts = 2
     partSz = 10
+    shape = pylibsort.ArrayShape.fromUniform(partSz, nparts)
 
     with tempfile.TemporaryDirectory() as tDir:
         aDir = pathlib.Path(tDir) / "distribArrayTest"
-        arr = pylibsort.fileDistribArray(aDir, npart=nparts)
+        arr = pylibsort.fileDistribArray.Create(aDir, shape)
 
-        retNParts = arr.nParts()
+        retNParts = arr.shape.npart
         if retNParts != nparts:
             raise testException("FileDistribArray",
                 "nParts gave wrong answer. Expected {}, Got {}".format(nparts,retNParts))
 
-        parts = arr.getParts()
-        if len(parts) != nparts:
-            raise testException("FileDistribArray",
-                label + ": Wrong number of parts. Expected {}, Got {}".format(nparts, len(parts)))
+        inBufs = fillArr(arr) 
 
-        inBufs = fillArr(arr, partSz) 
+        checkArr(arr, shape, inBufs, ("FileDistribArray", "initalArray"))
 
-        checkParts(parts, inBufs, ("FileDistribArray", "initalArray,getParts"))
+        arr.Close()
 
-        parts = [ arr.getPart(i) for i in range(nparts) ]
-        checkParts(parts, inBufs, ("FileDistribArray","initalArray,getPart"))
+        arrExisting = pylibsort.fileDistribArray.Open(aDir)
+        checkArr(arrExisting, shape, inBufs, ("FileDistribArray","ArrExisting"))
 
-        arrExisting = pylibsort.fileDistribArray(aDir, exist_ok=True)
-        parts = arrExisting.getParts()
-        checkParts(parts, inBufs, ("FileDistribArray","ArrExisting"))
-        
+        arrExisting.Destroy()
+        successfullyFailed = False
+        try:
+            arrExisting = pylibsort.fileDistribArray.Open(aDir)
+        except pylibsort.DistribArrayError as e:
+            successfullyFailed = True
+
+        if not successfullyFailed:
+            raise testException("FileDistribArray", "Opened a destroyed array (should have failed)")
+
 
 def checkPartRef(label, ref, expected):
     out = ref.read()
@@ -116,11 +141,12 @@ def checkPartRef(label, ref, expected):
 def testFilePartRef():
     nparts = 2
     partSz = 10
+    shape = pylibsort.ArrayShape.fromUniform(partSz, nparts)
 
     with tempfile.TemporaryDirectory() as tDir:
         aDir = pathlib.Path(tDir) / "distribArrayTest"
-        arr = pylibsort.fileDistribArray(aDir, npart=nparts)
-        inBufs = fillArr(arr, partSz)
+        arr = pylibsort.fileDistribArray.Create(aDir, shape)
+        inBufs = fillArr(arr)
 
         ref = pylibsort.partRef(arr, partID=0, start=0, nbyte=5)
         checkPartRef(("FilePartRef", "part0"), ref, inBufs[0][:5])
@@ -131,13 +157,15 @@ def testFilePartRef():
 def testPartRefReq():
     nparts = 2
     partSz = 10
+    shape = pylibsort.ArrayShape.fromUniform(partSz, nparts)
 
     with tempfile.TemporaryDirectory() as tDir:
         pylibsort.SetDistribMount(pathlib.Path(tDir))
 
         aDir = pathlib.Path(tDir) / "distribArrayTest"
-        arr = pylibsort.fileDistribArray(aDir, npart=nparts)
-        inBufs = fillArr(arr, partSz)
+        arr = pylibsort.fileDistribArray.Create(aDir, shape)
+        inBufs = fillArr(arr)
+        arr.Close()
 
         # offset and width aren't actually used by this test
         req = {
@@ -185,7 +213,7 @@ def testSortPartial():
     nElem = 1021
     nbyte = nElem*4
     pos = 4
-    width = 4
+    width = 8
     inBuf = bytearray([random.getrandbits(8) for _ in range(nbyte)])
     inInts = pylibsort.bytesToInts(inBuf)
 
@@ -197,24 +225,20 @@ def testSortPartial():
     respInts = pylibsort.bytesToInts(inBuf)
 
     respGroups = map(lambda v: pylibsort.groupBits(v, pos, width), respInts)
-    prevGroup = 0
+    curGroup = 0
     for i, g in enumerate(respGroups):
-        if g != prevGroup:
-            if g != prevGroup + 1:
-                raise testException("SortPartial",
-                        "Groups not in order. Expected {}, Got {}".format(
-                            prevGroup + 1, g))
+        while i == boundaries[curGroup + 1]:
+            curGroup += 1
 
-            if i != boundaries[g]:
-                raise testException("SortPartial",
-                        "Boundary {} incorrect. Expected {}, Got {}".format(
-                            g, i, boundaries[g]))
-            prevGroup = g
+        if g != curGroup:
+            raise testException("SortPartial",
+                    "Groups not in order. Expected {}, Got {}".format(
+                        prevGroup + 1, g))
 
 
 try:
-    testFileDistribPart()
     testFileDistribArray()
+    testFileDistribPart()
     testFilePartRef()
     testPartRefReq()
     testSortFull()
