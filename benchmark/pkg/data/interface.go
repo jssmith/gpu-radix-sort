@@ -7,37 +7,37 @@ import (
 
 // Describe the logical layout of a distributed array
 type DistribArrayShape struct {
-	lens []int // Current number of bytes per partition
-	caps []int // Current capacity of each partition a zero capcity indicates unlimited
+	lens []int64 // Current number of bytes per partition
+	caps []int64 // Current capacity of each partition a zero capcity indicates unlimited
 }
 
 // Create a DistribArrayShape with the provided capacities
-func CreateShape(caps []int) DistribArrayShape {
+func CreateShape(caps []int64) DistribArrayShape {
 	npart := len(caps)
-	shapeCaps := make([]int, npart)
-	shapeLens := make([]int, npart)
+	shapeCaps := make([]int64, npart)
+	shapeLens := make([]int64, npart)
 
 	copy(shapeCaps, caps)
 	return DistribArrayShape{caps: shapeCaps, lens: shapeLens}
 }
 
 // Create a DistribArrayShape with npart partitions and all capacities set to 'cap'.
-func CreateShapeUniform(cap int, npart int) DistribArrayShape {
-	caps := make([]int, npart)
+func CreateShapeUniform(cap int64, npart int) DistribArrayShape {
+	caps := make([]int64, npart)
 	for i := 0; i < npart; i++ {
 		caps[i] = cap
 	}
-	lens := make([]int, npart)
+	lens := make([]int64, npart)
 
 	return DistribArrayShape{caps: caps, lens: lens}
 }
 
 // DistribArrayShapes are immutable so we abstract access
-func (self *DistribArrayShape) Len(partIdx int) int {
+func (self *DistribArrayShape) Len(partIdx int) int64 {
 	return self.lens[partIdx]
 }
 
-func (self *DistribArrayShape) Cap(partIdx int) int {
+func (self *DistribArrayShape) Cap(partIdx int) int64 {
 	return self.caps[partIdx]
 }
 

@@ -8,8 +8,10 @@ import (
 
 func TestFetchPartRefs(t *testing.T) {
 	nByte := 1024
-	shape0 := DistribArrayShape{caps: []int{nByte, nByte}, lens: []int{0, 0}}
-	shape1 := DistribArrayShape{caps: []int{nByte, nByte}, lens: []int{0, 0}}
+
+	nByte64 := (int64)(nByte)
+	shape0 := DistribArrayShape{caps: []int64{nByte64, nByte64}, lens: []int64{0, 0}}
+	shape1 := DistribArrayShape{caps: []int64{nByte64, nByte64}, lens: []int64{0, 0}}
 
 	a0, err := CreateMemDistribArray("FetchPartRef0", shape0)
 	require.Nil(t, err, "Failed to create input array")

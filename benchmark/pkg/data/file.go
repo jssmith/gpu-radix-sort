@@ -1,25 +1,36 @@
 package data
 
 import (
-	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 
 	"github.com/pkg/errors"
 )
 
-var FileArrayFactory *ArrayFactory = &ArrayFactory{
-	Create: func(name string, shape DistribArrayShape) (DistribArray, error) {
-		a, err := CreateFileDistribArray(name, shape)
-		return (DistribArray)(a), err
-	},
+// A version of DistribArrayShape that is JSON serializable and can be updated
+// if needed. This is required because we don't want to export the fields of
+// DistribArrayShape but JSON can't handle unexported fields.
+type fileShape struct {
+	Lens []int64
+	Caps []int64
+}
 
-	Open: func(name string) (DistribArray, error) {
-		a, err := OpenFileDistribArray(name)
-		return (DistribArray)(a), err
-	},
+func NewFileArrayFactory(rootDir string) *ArrayFactory {
+	return &ArrayFactory{
+		Create: func(name string, shape DistribArrayShape) (DistribArray, error) {
+			a, err := CreateFileDistribArray(filepath.Join(rootDir, name), shape)
+			return (DistribArray)(a), err
+		},
+
+		Open: func(name string) (DistribArray, error) {
+			a, err := OpenFileDistribArray(filepath.Join(rootDir, name))
+			return (DistribArray)(a), err
+		},
+	}
 }
 
 // Stores a distributed array in the filesystem (in the directory at RootPath).
@@ -63,34 +74,9 @@ func OpenFileDistribArray(rootPath string) (*FileDistribArray, error) {
 		return nil, err
 	}
 
-	metaPath := filepath.Join(rootPath, "meta.dat")
-	metaFile, err := os.OpenFile(metaPath, os.O_CREATE, 0600)
+	err = arr.loadMeta()
 	if err != nil {
-		return nil, errors.Wrap(err, "Failed to create metdata file")
-	}
-
-	stat, err := metaFile.Stat()
-	if err != nil {
-		return nil, errors.Wrapf(err, "Could not stat metadata file %v", metaPath)
-	}
-
-	// Two arrays of int64s
-	nPart := (stat.Size() / 8) / 2
-
-	fullMeta := make([]int, nPart*2)
-	binary.Read(metaFile, binary.LittleEndian, fullMeta)
-	arr.shape.lens = fullMeta[:nPart]
-	arr.shape.caps = fullMeta[nPart:]
-
-	if err := metaFile.Close(); err != nil {
-		return nil, errors.Wrapf(err, "Failed to close metadata file")
-	}
-
-	arr.starts = make([]int64, nPart)
-	cumCap := (int64)(0)
-	for i := (int64)(0); i < nPart; i++ {
-		arr.starts[i] = cumCap
-		cumCap += (int64)(arr.shape.caps[i])
+		return nil, errors.Wrap(err, "Failed to load metadata")
 	}
 
 	dataPath := filepath.Join(arr.RootPath, "data.dat")
@@ -124,8 +110,8 @@ func CreateFileDistribArray(rootPath string, shape DistribArrayShape) (*FileDist
 	// =======================
 	// Metadata Management
 	// =======================
-	arr.shape.caps = make([]int, len(shape.caps))
-	arr.shape.lens = make([]int, len(shape.caps))
+	arr.shape.caps = make([]int64, len(shape.caps))
+	arr.shape.lens = make([]int64, len(shape.caps))
 	copy(arr.shape.caps, shape.caps)
 	copy(arr.shape.lens, shape.lens)
 
@@ -134,18 +120,6 @@ func CreateFileDistribArray(rootPath string, shape DistribArrayShape) (*FileDist
 	for i := 0; i < len(shape.caps); i++ {
 		arr.starts[i] = capSum
 		capSum += (int64)(shape.caps[i])
-	}
-
-	metaPath := filepath.Join(rootPath, "meta.dat")
-	metaFile, err := os.OpenFile(metaPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
-	if err != nil {
-		return nil, errors.Wrapf(err, "Failed to create metdata file")
-	}
-	binary.Write(metaFile, binary.LittleEndian, arr.shape.lens)
-	binary.Write(metaFile, binary.LittleEndian, arr.shape.caps)
-
-	if err := metaFile.Close(); err != nil {
-		return nil, errors.Wrapf(err, "Failed to close metadata file")
 	}
 
 	//=============================
@@ -161,7 +135,70 @@ func CreateFileDistribArray(rootPath string, shape DistribArrayShape) (*FileDist
 	}
 	arr.fd = dataFile
 
+	err = arr.commitMeta()
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to create array metdata")
+	}
+
 	return arr, nil
+}
+
+func (self *FileDistribArray) commitMeta() error {
+	jsonShape := fileShape{Lens: self.shape.lens, Caps: self.shape.caps}
+
+	metaPath := filepath.Join(self.RootPath, "meta.dat")
+	metaFile, err := os.OpenFile(metaPath, os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		return errors.Wrapf(err, "Failed to create metdata file")
+	}
+
+	jsonBytes, err := json.Marshal(jsonShape)
+	if err != nil {
+		return errors.Wrapf(err, "Couldn't convert shape to json")
+	}
+	_, err = metaFile.Write(jsonBytes)
+	if err != nil {
+		return errors.Wrap(err, "Error while writing metadata")
+	}
+
+	if err := metaFile.Close(); err != nil {
+		return errors.Wrapf(err, "Failed to close metadata file")
+	}
+	return nil
+}
+
+func (self *FileDistribArray) loadMeta() error {
+	metaPath := filepath.Join(self.RootPath, "meta.dat")
+	metaFile, err := os.OpenFile(metaPath, os.O_CREATE, 0600)
+	if err != nil {
+		return errors.Wrap(err, "Failed to create metdata file")
+	}
+
+	metaBytes, err := ioutil.ReadAll(metaFile)
+	if err != nil {
+		return errors.Wrap(err, "Failed to read metadata")
+	}
+
+	var jsonShape fileShape
+	err = json.Unmarshal(metaBytes, &jsonShape)
+	if err != nil {
+		return errors.Wrap(err, "Failed to interpret metadata")
+	}
+
+	self.shape.lens = jsonShape.Lens
+	self.shape.caps = jsonShape.Caps
+
+	if err := metaFile.Close(); err != nil {
+		return errors.Wrapf(err, "Failed to close metadata file")
+	}
+
+	self.starts = make([]int64, len(self.shape.lens))
+	cumCap := (int64)(0)
+	for i := 0; i < len(self.shape.lens); i++ {
+		self.starts[i] = cumCap
+		cumCap += (int64)(self.shape.caps[i])
+	}
+	return nil
 }
 
 func (self *FileDistribArray) GetShape() (*DistribArrayShape, error) {
@@ -186,7 +223,7 @@ func (self *FileDistribArray) GetPartRangeReader(partId, start, end int) (io.Rea
 	}
 
 	if end <= 0 {
-		reader.nRemaining = (self.shape.lens[partId] + end) - start
+		reader.nRemaining = (int)(self.shape.lens[partId] + (int64)(end) - (int64)(start))
 	} else {
 		reader.nRemaining = end - start
 	}
@@ -199,32 +236,13 @@ func (self *FileDistribArray) GetPartReader(partId int) (io.ReadCloser, error) {
 }
 
 func (self *FileDistribArray) Close() error {
-	var eMsg string
+	// var eMsg string
 
-	// Commit metadata
-	metaPath := filepath.Join(self.RootPath, "meta.dat")
-	if metaFile, err := os.OpenFile(metaPath, os.O_WRONLY, 0600); err == nil {
-		e1 := binary.Write(metaFile, binary.LittleEndian, self.shape.lens)
-		e2 := binary.Write(metaFile, binary.LittleEndian, self.shape.caps)
-		if e2 != nil {
-			eMsg += fmt.Sprintf(" Failed to write metadata: %v. ", e2)
-		} else if e1 != nil {
-			eMsg += fmt.Sprintf(" Failed to write metadata: %v. ", e1)
-		}
+	closeErr := self.fd.Close()
+	metaErr := self.commitMeta()
 
-		if err := metaFile.Close(); err != nil {
-			eMsg += fmt.Sprintf(" Failed to close metadata file. Array may be corrupted!: %v. ", err)
-		}
-	} else {
-		eMsg += fmt.Sprintf(" Failed to open metdata file. Array may be corrupted!: %v. ", err)
-	}
-
-	if err := self.fd.Close(); err != nil {
-		eMsg += fmt.Sprintf(" Failed to close data file. Array may be corrupted!: %v. ", err)
-	}
-
-	if eMsg != "" {
-		return fmt.Errorf(eMsg)
+	if closeErr != nil || metaErr != nil {
+		return fmt.Errorf("Array commit failure (data may be corrupted): metadata: %v, data: %v", metaErr, closeErr)
 	}
 
 	return nil
@@ -235,7 +253,7 @@ func (self *FileDistribArray) Destroy() error {
 	// up resources but RemoveAll means the OS will get to it eventually (the
 	// fd will be closed on process exit at a minimum). Consistency is
 	// irrelevant since the resource is being removed anyway.
-	self.fd.Close()
+	self.Close()
 
 	return os.RemoveAll(self.RootPath)
 }
@@ -280,14 +298,14 @@ func (self *FileDistribWriter) Write(b []byte) (int, error) {
 	nRemaining := self.arr.shape.caps[self.partId] - self.arr.shape.lens[self.partId]
 
 	// File arrays have fixed-sized partitions (they're also append-only)
-	toWrite := len(b)
+	toWrite := (int64)(len(b))
 	if toWrite > nRemaining {
 		err = io.EOF
 		toWrite = nRemaining
 	}
 
 	n, wErr := self.arr.fd.Write(b[:toWrite])
-	self.arr.shape.lens[self.partId] += n
+	self.arr.shape.lens[self.partId] += (int64)(n)
 
 	if wErr != nil {
 		err = wErr

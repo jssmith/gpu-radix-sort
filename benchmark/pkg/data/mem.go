@@ -38,7 +38,7 @@ type MemDistribPartReadCloser struct {
 func (self *MemDistribPartWriteCloser) Write(in []byte) (n int, err error) {
 	shape := self.arr.shape
 
-	toWrite := len(in)
+	toWrite := (int64)(len(in))
 	nRemaining := shape.caps[self.partId] - shape.lens[self.partId]
 
 	if toWrite > nRemaining {
@@ -49,7 +49,7 @@ func (self *MemDistribPartWriteCloser) Write(in []byte) (n int, err error) {
 	self.arr.parts[self.partId] = append(self.arr.parts[self.partId], in[:toWrite]...)
 	shape.lens[self.partId] += toWrite
 
-	return toWrite, err
+	return (int)(toWrite), err
 }
 
 func (self *MemDistribPartWriteCloser) Close() error {
@@ -87,7 +87,7 @@ func CreateMemDistribArray(name string, shape DistribArrayShape) (*MemDistribArr
 	}
 
 	// Deep copy because MemDistribArray modifies these values internally, even though the user can't
-	arrShape := DistribArrayShape{caps: make([]int, len(shape.caps)), lens: make([]int, len(shape.lens))}
+	arrShape := DistribArrayShape{caps: make([]int64, len(shape.caps)), lens: make([]int64, len(shape.lens))}
 	copy(arrShape.caps, shape.caps)
 	copy(arrShape.lens, shape.lens)
 
@@ -120,7 +120,7 @@ func (self *MemDistribArray) GetShape() (*DistribArrayShape, error) {
 
 func (self *MemDistribArray) GetPartRangeReader(partId, start, end int) (io.ReadCloser, error) {
 	if end <= 0 {
-		return &MemDistribPartReadCloser{buf: self.parts[partId], start: start, limit: self.shape.caps[partId] + end}, nil
+		return &MemDistribPartReadCloser{buf: self.parts[partId], start: start, limit: (int)(self.shape.caps[partId]) + end}, nil
 	} else {
 		return &MemDistribPartReadCloser{buf: self.parts[partId], start: start, limit: end}, nil
 	}

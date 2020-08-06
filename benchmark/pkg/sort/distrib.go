@@ -82,17 +82,17 @@ func LocalDistribWorker(inBkts []*data.PartRef, offset int, width int, baseName 
 
 	// Actual Sort
 	nBucket := 1 << width
-	boundaries := make([]uint64, nBucket)
+	boundaries := make([]int64, nBucket)
 	if err := GpuPartial(inBytes, boundaries, offset, width); err != nil {
 		return nil, errors.Wrap(err, "Local sort failed")
 	}
 
-	partSzs := make([]int, nBucket)
+	partSzs := make([]int64, nBucket)
 	for i := 0; i < nBucket; i++ {
 		if i == nBucket-1 {
-			partSzs[i] = len(inBytes) - (int)(boundaries[i])
+			partSzs[i] = (int64)(len(inBytes)) - boundaries[i]
 		} else {
-			partSzs[i] = (int)(boundaries[i+1]) - (int)(boundaries[i])
+			partSzs[i] = boundaries[i+1] - boundaries[i]
 		}
 	}
 
@@ -106,7 +106,7 @@ func LocalDistribWorker(inBkts []*data.PartRef, offset int, width int, baseName 
 
 	for i := 0; i < nBucket; i++ {
 		start := (int)(boundaries[i])
-		end := start + partSzs[i]
+		end := start + (int)(partSzs[i])
 
 		writer, err := outArr.GetPartWriter(i)
 		if err != nil {
@@ -237,7 +237,7 @@ func SortDistribFromRaw(inRaw []byte, baseName string,
 		return nil, errors.Wrap(err, "Failed to initialize libsort")
 	}
 
-	shape := data.CreateShapeUniform(len(inRaw), 1)
+	shape := data.CreateShapeUniform((int64)(len(inRaw)), 1)
 	origArr, err := factory.Create(baseName+"_input", shape)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create input distribarray")

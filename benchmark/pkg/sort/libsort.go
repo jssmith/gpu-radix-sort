@@ -44,7 +44,7 @@ func GpuFull(in []byte) error {
 
 // Interpret in as uint32s and sort by the radix of width bits starting at bit 'offset'
 // boundaries will contain the byte offset of each radix group after sorting
-func GpuPartial(in []byte, boundaries []uint64, offset int, width int) error {
+func GpuPartial(in []byte, boundaries []int64, offset int, width int) error {
 	boundaries32 := make([]uint32, len(boundaries))
 
 	cints := (*C.uint32_t)(unsafe.Pointer(&in[0]))
@@ -56,7 +56,7 @@ func GpuPartial(in []byte, boundaries []uint64, offset int, width int) error {
 	)
 
 	for i := 0; i < len(boundaries32); i++ {
-		boundaries[i] = (uint64)(boundaries32[i]) * (uint64)(4)
+		boundaries[i] = (int64)(boundaries32[i]) * (int64)(4)
 	}
 
 	if !success {

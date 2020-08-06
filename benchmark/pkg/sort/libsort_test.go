@@ -88,7 +88,7 @@ func TestParallel(t *testing.T) {
 }
 
 // Make sure the partial sort worked and set the boundaries correctly
-func checkPartial(t *testing.T, testBytes []byte, boundaries []uint64, origBytes []byte) {
+func checkPartial(t *testing.T, testBytes []byte, boundaries []int64, origBytes []byte) {
 	var err error
 
 	require.Equal(t, len(origBytes), len(testBytes), "Test array has the wrong length")
@@ -113,7 +113,7 @@ func checkPartial(t *testing.T, testBytes []byte, boundaries []uint64, origBytes
 		bucket := test[i] & mask
 		if bucket != curBucket {
 			require.Equal(t, curBucket+1, bucket, "Buckets not in order")
-			require.Equalf(t, boundaries[bucket]/4, (uint64)(i), "Boundary for end of bucket %v is wrong", i)
+			require.Equalf(t, boundaries[bucket]/4, (int64)(i), "Boundary for end of bucket %v is wrong", i)
 
 			curBucket = bucket
 		}
@@ -144,7 +144,7 @@ func TestLocalPartial(t *testing.T) {
 	test, err := GenerateInputs((uint64)(tLen))
 	require.Nil(t, err, "failed to generate test inputs")
 
-	boundaries := make([]uint64, nbucket)
+	boundaries := make([]int64, nbucket)
 
 	ref := make([]byte, len(test))
 	copy(ref, test)

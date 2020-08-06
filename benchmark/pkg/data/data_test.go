@@ -73,7 +73,6 @@ func generateBytes(t *testing.T, arr DistribArray, partLen int) (raw []byte) {
 	for partIdx := 0; partIdx < shape.NPart(); partIdx++ {
 		globalStart := partIdx * partLen
 
-		t.Logf("Processing partition %v\n", partIdx)
 		writer, err := arr.GetPartWriter(partIdx)
 		require.Nilf(t, err, "Failed to get writer for partition %v", partIdx)
 
@@ -92,6 +91,7 @@ func checkArr(t *testing.T, arr DistribArray, ref []byte) {
 	shape, err := arr.GetShape()
 	require.Nilf(t, err, "Failed to get shape of array")
 
+	totalRead := (int64)(0)
 	for partIdx := 0; partIdx < shape.NPart(); partIdx++ {
 		partLen := shape.Len(partIdx)
 		retBytes := make([]byte, partLen)
@@ -102,24 +102,135 @@ func checkArr(t *testing.T, arr DistribArray, ref []byte) {
 		readPart(t, reader, retBytes)
 
 		// Validate
-		for i := 0; i < partLen; i++ {
-			refPos := partIdx*partLen + i
+		for i := (int64)(0); i < partLen; i++ {
+			refPos := (int64)(partIdx)*partLen + i
 			require.Equal(t, retBytes[i], ref[refPos],
 				"Returned bytes don't match at index %v", i)
 		}
+		totalRead += partLen
 	}
+
+	require.Equal(t, (int64)(len(ref)), totalRead, "Didn't read enough data")
 }
 
 func testArrayFactory(t *testing.T, fact *ArrayFactory) {
-	targetSz := 16
+	var err error
+	targetSz := (int64)(16)
 	shape := CreateShapeUniform(targetSz, 2)
 
 	arr, err := fact.Create("testFactory0", shape)
 	require.Nil(t, err, "Failed to create array from factory")
-	arr.Close()
+	err = arr.Close()
+	require.Nil(t, err, "Failed to close array")
 
 	openArr, err := fact.Open("testFactory0")
 	require.Nil(t, err, "Failed to open array from factory")
 
 	openArr.Destroy()
+}
+
+func testDistribArr(t *testing.T, factory *ArrayFactory) {
+	targetSz := (int64)(64)
+	shape := CreateShapeUniform(targetSz, 2)
+
+	t.Run("ReadWrite", func(t *testing.T) {
+		arr0, err := factory.Create("ReadWrite", shape)
+		require.Nilf(t, err, "Failed to initialize array")
+		raw := generateBytes(t, arr0, (int)(targetSz))
+
+		checkArr(t, arr0, raw)
+
+		err = arr0.Destroy()
+		require.Nilf(t, err, "Failed to destroy array: %v", "ReRead")
+	})
+
+	t.Run("ReRead", func(t *testing.T) {
+		arr0, err := factory.Create("ReRead", shape)
+		require.Nilf(t, err, "Failed to initialize array")
+		raw := generateBytes(t, arr0, (int)(targetSz))
+
+		checkArr(t, arr0, raw)
+		checkArr(t, arr0, raw)
+
+		err = arr0.Destroy()
+		require.Nilf(t, err, "Failed to destroy array: %v", "ReRead")
+	})
+
+	t.Run("ReOpen", func(t *testing.T) {
+		arr0, err := factory.Create("ReRead", shape)
+		require.Nilf(t, err, "Failed to initialize array")
+		raw := generateBytes(t, arr0, (int)(targetSz))
+
+		finalShape, err := arr0.GetShape()
+		require.Nil(t, err, "Failed to read shape after writing to initial array")
+
+		err = arr0.Close()
+		require.Nil(t, err, "Failed to close array0")
+
+		reArr0, err := factory.Open("ReRead")
+		require.Nil(t, err, "Failed to re-open array")
+
+		reShape, err := reArr0.GetShape()
+		require.Nil(t, err, "Couldn't read shape of re-opened array")
+		require.Equal(t, finalShape.caps, reShape.caps, "Re-opened capacities don't match")
+		require.Equal(t, finalShape.lens, reShape.lens, "Re-opened lengths don't match")
+
+		checkArr(t, reArr0, raw)
+
+		err = reArr0.Destroy()
+		require.Nilf(t, err, "Failed to destroy array: %v", "ReRead")
+	})
+
+	t.Run("MultipleArrays", func(t *testing.T) {
+		arr0, err := factory.Create("MultipleArrays0", shape)
+		require.Nilf(t, err, "Failed to initialize array")
+
+		newShape := CreateShapeUniform(targetSz, 2)
+		arr1, err := factory.Create("MultipleArrays1", newShape)
+		require.Nilf(t, err, "Failed to initialize array: %v", err)
+
+		raw0 := generateBytes(t, arr0, (int)(targetSz))
+		raw1 := generateBytes(t, arr1, (int)(targetSz))
+
+		err = arr0.Close()
+		require.Nil(t, err, "Failed to close array0")
+		err = arr1.Close()
+		require.Nil(t, err, "Failed to close array1")
+
+		// Check reopening both
+		reArr0, err := factory.Open("MultipleArrays0")
+		require.Nilf(t, err, "Failed to reopen arr0")
+		reArr1, err := factory.Open("MultipleArrays1")
+		require.Nilf(t, err, "Failed to reopen arr1")
+
+		checkArr(t, reArr0, raw0)
+		checkArr(t, reArr1, raw1)
+
+		err = reArr0.Destroy()
+		require.Nil(t, err, "Failed to destroy re-opened arr0")
+		err = reArr1.Destroy()
+		require.Nil(t, err, "Failed to destroy re-opened arr1")
+	})
+
+	t.Run("Destroy", func(t *testing.T) {
+		arr, err := factory.Create("Destroy", shape)
+		require.Nilf(t, err, "Failed to initialize array")
+		generateBytes(t, arr, (int)(targetSz))
+
+		newShape := CreateShapeUniform(targetSz, 3)
+
+		// Should Error
+		_, err = factory.Create("Destroy", newShape)
+		require.NotNil(t, err, "Did not detect existing array")
+
+		arr.Destroy()
+
+		// Now should succeed
+		newArr, err := factory.Create("Destroy", newShape)
+		require.Nil(t, err, "Failed to recreate array after destroy")
+
+		shape, err := newArr.GetShape()
+		require.Equal(t, 3, shape.NPart(), "New array has old shape")
+		require.Equal(t, (int64)(0), shape.Len(0), "New array has non-empty partitions")
+	})
 }

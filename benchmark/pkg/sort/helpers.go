@@ -100,7 +100,7 @@ func (self *BucketReader) ReadRef(sz int) ([]*data.PartRef, error) {
 	nNeeded := sz
 
 	for done := false; !done; done = self.incIdx() {
-		partLen := self.shapes[self.arrX].Len(self.partX)
+		partLen := (int)(self.shapes[self.arrX].Len(self.partX))
 
 		for self.dataX < partLen {
 			nRemaining := partLen - self.dataX
@@ -129,7 +129,7 @@ func (self *BucketReader) Read(out []byte) (n int, err error) {
 	outX := 0
 
 	for done := false; !done; done = self.incIdx() {
-		partLen := self.shapes[self.arrX].Len(self.partX)
+		partLen := (int)(self.shapes[self.arrX].Len(self.partX))
 
 		arr := self.arrs[self.arrX]
 		for self.dataX < partLen {

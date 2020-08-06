@@ -27,7 +27,7 @@ func TestLocalDistribWorker(t *testing.T) {
 	origRaw, err := GenerateInputs((uint64)(nElem))
 	require.Nil(t, err, "Failed to generate test inputs")
 
-	shape := data.CreateShapeUniform(nByte, 1)
+	shape := data.CreateShapeUniform((int64)(nByte), 1)
 	origArr, err := data.CreateMemDistribArray("testLocalDistribWorker", shape)
 	require.Nil(t, err)
 
@@ -50,13 +50,13 @@ func TestLocalDistribWorker(t *testing.T) {
 	require.Equal(t, npart, outShape.NPart(), "Output array has wrong number of partitions")
 
 	outRaw := make([]byte, nByte)
-	boundaries := make([]uint64, npart)
+	boundaries := make([]int64, npart)
 	totalLen := 0
 
 	for i := 0; i < outShape.NPart(); i++ {
-		partLen := outShape.Len(i)
+		partLen := (int)(outShape.Len(i))
 
-		boundaries[i] = (uint64)(totalLen)
+		boundaries[i] = (int64)(totalLen)
 
 		totalLen += partLen
 		require.LessOrEqual(t, totalLen, nByte, "Too much data returned")
@@ -94,13 +94,13 @@ func generateArrs(t *testing.T, narr int, baseName string,
 			// Total data will be ordered by partition ID first, then by array
 			// (the strided access by the generator should produce in-order
 			// data)
-			partRaw := bytes.Repeat([]byte{(byte)((partX << 4) | arrX)}, shape.Cap(partX))
+			partRaw := bytes.Repeat([]byte{(byte)((partX << 4) | arrX)}, (int)(shape.Cap(partX)))
 
 			writer, err := arrs[arrX].GetPartWriter(partX)
 			require.Nilf(t, err, "Failed to get writer for output %v:%v", arrX, partX)
 
 			n, err := writer.Write(partRaw)
-			require.Equal(t, shape.Cap(partX), n, "Didn't write enough to initial data")
+			require.Equal(t, (int)(shape.Cap(partX)), n, "Didn't write enough to initial data")
 			require.Nil(t, err, "Failed to write initial data")
 			writer.Close()
 		}
@@ -118,7 +118,7 @@ func testBucketReader(t *testing.T, order ReadOrder,
 	// npart := 4
 	elemPerPart := 256
 	nElem := narr * npart * elemPerPart
-	uniformShape := data.CreateShapeUniform(elemPerPart, npart)
+	uniformShape := data.CreateShapeUniform((int64)(elemPerPart), npart)
 
 	// Given the global 'index' of 'value' taken from an array list returned by
 	// generateArrs, ensures that the value is correct for that index.
@@ -130,7 +130,7 @@ func testBucketReader(t *testing.T, order ReadOrder,
 		partCalc:
 			for partX := 0; partX < shape.NPart(); partX++ {
 				for arrX := 0; arrX < narr; arrX++ {
-					sum += shape.Cap(partX)
+					sum += (int)(shape.Cap(partX))
 					// t.Logf("Shape %v:%v: %v", shape.Cap(partX), arrX, partX, sum)
 					if sum >= index+1 {
 						// t.Logf("idx=%v, [%v:%v]->%v", index, arrX, partX, globalPart)
@@ -165,7 +165,7 @@ func testBucketReader(t *testing.T, order ReadOrder,
 		partCalc:
 			for arrX := 0; arrX < narr; arrX++ {
 				for partX := 0; partX < shape.NPart(); partX++ {
-					sum += shape.Cap(partX)
+					sum += (int)(shape.Cap(partX))
 					// t.Logf("Shape %v:%v: %v", arrX, partX, sum)
 					if sum >= index+1 {
 						// t.Logf("idx=%v, [%v:%v]->%v", index, arrX, partX, globalPart)
@@ -245,12 +245,12 @@ func testBucketReader(t *testing.T, order ReadOrder,
 	// Test with some partitions containing zero elements
 	t.Run("ZeroParts", func(t *testing.T) {
 		zeroRatio := 4
-		caps := make([]int, npart)
+		caps := make([]int64, npart)
 		for i := 0; i < npart; i++ {
 			if i%zeroRatio == 0 {
-				caps[i] = elemPerPart
+				caps[i] = (int64)(elemPerPart)
 			} else {
-				caps[i] = 0
+				caps[i] = (int64)(0)
 			}
 		}
 		zerosShape := data.CreateShape(caps)
@@ -328,7 +328,7 @@ func TestBucketReaderRef(t *testing.T) {
 	npart := 2
 	elemPerPart := 256
 	nElem := narr * npart * elemPerPart
-	shape := data.CreateShapeUniform(elemPerPart, npart)
+	shape := data.CreateShapeUniform((int64)(elemPerPart), npart)
 
 	arrs := generateArrs(t, narr, "testBucketReaderRef", data.MemArrayFactory, shape)
 
@@ -431,5 +431,5 @@ func TestSortFileDistrib(t *testing.T) {
 	require.Nilf(t, err, "Couldn't create temporary test directory")
 	defer os.RemoveAll(tmpDir)
 
-	sortDistribTest(t, tmpDir+"/", data.FileArrayFactory, LocalDistribWorker)
+	sortDistribTest(t, "testSortFileDistrib", data.NewFileArrayFactory(tmpDir), LocalDistribWorker)
 }
