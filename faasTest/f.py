@@ -10,9 +10,10 @@ import tempfile
 import functools
 import operator
 import time
+import numpy as np
 
 # from memory_profiler import profile
-# import cProfile
+import cProfile
 
 # Ideally this would be set somewhere else (e.g. in AWS lambda you can put
 # it in /var) but for now this works.
@@ -31,8 +32,9 @@ def f(event):
                 }
 
     refs = pylibsort.getPartRefs(event)
-    rawBytes = functools.reduce(operator.iconcat,
-                    map(operator.methodcaller('read'), refs))
+    # rawBytes = functools.reduce(operator.iconcat,
+    #                 map(operator.methodcaller('read'), refs))
+    rawBytes = pylibsort.readPartRefs(refs)
 
     try:
         boundaries = pylibsort.sortPartial(rawBytes, event['offset'], event['width'])
@@ -42,14 +44,8 @@ def f(event):
                 "err" : str(e)
                }
 
-    # Convert boundaries to byte addresses and add a boundary after the last group
-    boundaries = list(map(lambda x: x*4, boundaries))
-    boundaries.append(len(rawBytes))
-
-    outArr = pylibsort.getOutputArray(event)
-    for i, p in enumerate(outArr.getParts()):
-        p.write(rawBytes[boundaries[i]:boundaries[i+1]])
-
+    pylibsort.writeOutput(event, rawBytes, boundaries)
+    
     return {
             "success" : True,
             "err" : "" 
@@ -58,11 +54,13 @@ def f(event):
 # @profile
 def main():
     """Main only used for testing purposes"""
-    # nElem = 4000
+    # nElem = 256 
     nElem = 256*(1024*1024)
+    # nElem = 1024*1024
     nbyte = nElem*4
     offset = 0
-    width = 4
+    # width = 8
+    width = 16
     narr = 2
     npart = 2
     bytesPerPart = int(nbyte / (narr * npart))
@@ -77,21 +75,23 @@ def main():
         outArrName = "faasSortTestOut"
 
         # Write source arrays
+        inShape = pylibsort.ArrayShape.fromUniform(bytesPerPart, npart)
         refs = []
         for arrX in range(narr):
             arrName = inArrName + str(arrX)
-            inArr = pylibsort.fileDistribArray(tDir / arrName, npart=npart)
-            for partX in range(npart):
-                start = ((arrX*npart) + partX)*bytesPerPart
-                part = inArr.getPart(partX)
-                part.write(inBuf[start:start+bytesPerPart])
+            inArr = pylibsort.fileDistribArray.Create(tDir / arrName, inShape)
 
+            start = (arrX*npart)*bytesPerPart
+            end = start + (bytesPerPart*npart)
+            inArr.WriteAll(inBuf[start:end])
+            for partX in range(npart):
                 refs.append({
                     'arrayName': arrName,
                     'partID' : partX,
                     'start' : 0,
                     'nbyte' : -1
                 })
+            inArr.Close()
 
         req = {
                 "offset" : offset,
@@ -101,58 +101,40 @@ def main():
                 "output" : outArrName
         }
 
-        del inBuf
-
         start = time.time()
-        resp = f(req)
+        # resp = f(req)
+        cProfile.runctx("f(req)", globals=globals(), locals=locals(), sort="cumulative", filename="16b.prof")
         print(time.time() - start)
-        if not resp['success']:
-            print("FAILURE: Function returned error: " + resp['err'])
-            exit(1)
-
-    #     inInts = pylibsort.bytesToInts(inBuf)
-    #     outArr = pylibsort.fileDistribArray(tDir / outArrName, exist_ok=True)
-    #
-    #     groupOuts = []
-    #     parts = outArr.getParts()
-    #     for p in parts:
-    #         groupOuts.append(p.read())
-    #
-    # if len(groupOuts) != (1 << width):
-    #     print("FAILURE: Too few groups. Expected {}, Got {}".format(1 << width, len(groupOuts)))
-    #     exit(1)
-    #
-    # retNElem = 0
-    # for i, g in enumerate(groupOuts):
-    #     gInts = pylibsort.bytesToInts(g)
-    #     retNElem += len(gInts)
-    #
-    #     badGroups = filter(lambda x: pylibsort.groupBits(x, offset, width) != i, gInts)
-    #     firstBad = next(badGroups, None)
-    #     if firstBad is not None:
-    #         print("FAILURE: Group {} has element with groupID {}".format(
-    #             i, pylibsort.groupBits(firstBad, offset, width)))
+    #     if not resp['success']:
+    #         print("FAILURE: Function returned error: " + resp['err'])
     #         exit(1)
     #
-    # if retNElem != nElem:
-    #     print("FAILURE: Not enough elements returned. Expected {}, Got {}".format(nElem, retNElem))
-    #     exit(1)
+    #     outArr = pylibsort.fileDistribArray.Open(tDir / outArrName)
+    #     outBuf = outArr.ReadAll()
+    #     boundaries = outArr.shape.starts
     #
+    #     outArr.Destroy()
+    #
+    # pylibsort.checkPartial(inBuf, outBuf, outArr.shape.caps, offset, width)
+    # cProfile.runctx("pylibsort.checkPartial(inBuf, outBuf, outArr.shape.caps, offset, width)", globals=globals(), locals=locals(),sort="cumulative")
+
     print("PASS")
 
 
 # @profile
 def testGenerate():
     # sz = 256*1024*1024
-    sz = 1024
+    sz = 1024*1024
     testIn = pylibsort.generateInputs(sz)
 
-    with tempfile.TemporaryFile() as f:
-        f.write(testIn[:])
+    start = time.time()
+    ints = pylibsort.bytesToInts(testIn)
+    print(time.time() - start)
+    # with tempfile.TemporaryFile() as f:
+    #     f.write(testIn[:])
 
 
 if __name__ == "__main__":
     # cProfile.run('main()', sort='cumulative')
     main()
     # testGenerate()
-

@@ -204,9 +204,10 @@ def testSortFull():
 
     respInts = pylibsort.bytesToInts(inBuf)
 
-    success, idx = pylibsort.checkSortFull(respInts, inInts)
-    if not success:
-        raise testException("SortFull", "Test sorted wrong")
+    try:
+        pylibsort.checkSortFull(respInts, inInts)
+    except Exception as e:
+        raise testException("SortFull", str(e))
 
 
 def testSortPartial():
@@ -214,26 +215,19 @@ def testSortPartial():
     nbyte = nElem*4
     pos = 4
     width = 8
-    inBuf = bytearray([random.getrandbits(8) for _ in range(nbyte)])
-    inInts = pylibsort.bytesToInts(inBuf)
+    refBuf = bytearray([random.getrandbits(8) for _ in range(nbyte)])
+    # refInts = pylibsort.bytesToInts(inBuf)
+
+    testBuf = refBuf.copy()
+    try:
+        boundaries = pylibsort.sortPartial(testBuf, pos, width)
+    except Exception as e:
+        raise testException("SortPartial", "PyLib sort error") from e
 
     try:
-        boundaries = pylibsort.sortPartial(inBuf, pos, width)
+        pylibsort.checkPartial(testBuf, refBuf, boundaries, pos, width)
     except Exception as e:
-        raise testException("SortFromBytes", "PyLib sort error") from e
-
-    respInts = pylibsort.bytesToInts(inBuf)
-
-    respGroups = map(lambda v: pylibsort.groupBits(v, pos, width), respInts)
-    curGroup = 0
-    for i, g in enumerate(respGroups):
-        while i == boundaries[curGroup + 1]:
-            curGroup += 1
-
-        if g != curGroup:
-            raise testException("SortPartial",
-                    "Groups not in order. Expected {}, Got {}".format(
-                        prevGroup + 1, g))
+        raise testException("SortFromBytes", str(e))
 
 
 try:

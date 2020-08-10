@@ -7,6 +7,7 @@ import shutil
 import itertools
 import operator
 import json
+import numpy as np
 
 from . import __state
 
@@ -120,7 +121,7 @@ class fileDistribArray(DistribArray):
         self.metaPath = self.rootPath / 'meta.json'
 
 
-    def _commitMeta(self):
+    def __commitMeta(self):
         with open(self.metaPath, 'w') as metaF:
             jsonShape = {"Lens" : self.shape.lens, "Caps" : self.shape.caps}
             json.dump(jsonShape, metaF)
@@ -130,11 +131,13 @@ class fileDistribArray(DistribArray):
     def Create(cls, rootPath, shape: ArrayShape):
         arr = cls(rootPath)
 
-        arr.rootPath.mkdir(0o700)
-        arr.datPath.touch(0o600)
+        # These need open permissions because of docker user mismatches (docker
+        # will use root so the host can't re-open the file).
+        arr.rootPath.mkdir(0o777)
+        arr.datPath.touch(0o666)
+        arr.metaPath.touch(0o666)
 
         arr.shape = ArrayShape(lens=shape.lens.copy(), caps=shape.caps.copy())
-        arr._commitMeta()
         
         arr.dataF = open(arr.datPath, 'r+b')
 
@@ -158,14 +161,17 @@ class fileDistribArray(DistribArray):
 
     def Close(self):
         self.dataF.close()
-        self._commitMeta()
+        self.__commitMeta()
 
 
     def Destroy(self):
         shutil.rmtree(self.rootPath)
 
 
-    def ReadPart(self, partID, start=0, nbyte=-1):
+    def ReadPart(self, partID, start=0, nbyte=-1, dest=None):
+        """Read partition 'partID' of this array. If 'dest' is specified, the
+        data is read into that bytearray or memoryview, otherwise a new
+        bytearray is returned"""
         if nbyte == -1:
             nbyte = self.shape.lens[partID] - start
 
@@ -173,7 +179,11 @@ class fileDistribArray(DistribArray):
             raise DistribArrayError("Read beyond end of partition (asked for {}+{}, limit {}".format(start, nbyte, self.shape.lens[partID])) 
 
         self.dataF.seek(self.shape.starts[partID] + start)
-        return bytearray(self.dataF.read(nbyte))
+
+        if dest is None:
+            return bytearray(self.dataF.read(nbyte))
+        else:
+            self.dataF.readinto(dest[:nbyte])
 
 
     def WritePart(self, partId, buf):
@@ -192,7 +202,8 @@ class fileDistribArray(DistribArray):
         use the shape attribute to determine partition boundaries and the valid
         portions of each partition."""
         self.dataF.seek(0)
-        return bytearray(self.dataF.read())
+        # return bytearray(self.dataF.read())
+        return memoryview(self.dataF.read())
 
 
     def WriteAll(self, buf):
@@ -216,14 +227,39 @@ class partRef():
         self.start = start
         self.nbyte = nbyte 
 
-    def read(self):
-        return self.arr.ReadPart(self.partID, start=self.start, nbyte=self.nbyte)
+    def read(self, dest=None):
+        if dest is None:
+            return self.arr.ReadPart(self.partID, start=self.start, nbyte=self.nbyte)
+        else:
+            return self.arr.ReadPart(self.partID, start=self.start, nbyte=self.nbyte, dest=dest)
 
 
 def __fileGetRef(req) -> partRef:
     """Return a partRef from an entry in the 'input' field of a req"""
     arr = fileDistribArray.Open(FileDistribArrayMount / req['arrayName'])
-    return partRef(arr, partID=req['partID'], start=req['start'], nbyte=req['nbyte'])
+
+    # Internally, it's easier to work with absolute numbers, so we convert -1
+    # nbyte's from the request into their real value
+    nbyte = req['nbyte']
+    if nbyte == -1:
+        nbyte = arr.shape.lens[req['partID']]
+
+    return partRef(arr, partID=req['partID'], start=req['start'], nbyte=nbyte)
+
+
+def readPartRefs(refs):
+    nTotal = 0
+    for r in refs:
+        nTotal += r.nbyte
+
+    out = memoryview(bytearray(nTotal))
+
+    loc = 0
+    for r in refs:
+        r.read(dest=out[loc:])
+        loc += r.nbyte
+
+    return out
 
 
 def getPartRefs(req: dict):
@@ -235,10 +271,8 @@ def getPartRefs(req: dict):
         raise ValueError("Invalid request type: " + str(req['arrType']))
 
 
-def __fileGetOutputArray(req) -> fileDistribArray:
-    return fileDistribArray(FileDistribArrayMount / req['output'],
-            npart=(1 << req['width']), exist_ok=True)
-
+def __fileGetOutputArray(req, shape: ArrayShape) -> fileDistribArray:
+    return fileDistribArray.Create(FileDistribArrayMount / req['output'], shape)
 
 def getOutputArray(req: dict):
     """Returns a FileDistribArray to use for the output of req"""
@@ -247,6 +281,17 @@ def getOutputArray(req: dict):
         return __fileGetOutputArray(req)
     else:
         raise ValueError("Invalid request type: " + str(req['arrType']))
+
+
+def writeOutput(req: dict, rawBytes, boundaries):
+    caps = np.array(boundaries)
+    caps *= 4
+    caps = np.diff(caps, append=len(rawBytes))
+    
+    shape = ArrayShape.fromCaps(caps.tolist())
+    outArr = fileDistribArray.Create(FileDistribArrayMount / req['output'], shape)
+    outArr.WriteAll(rawBytes)
+    outArr.Close()
 
 
 # Generates n random integers and returns a bytearray of them
