@@ -1,0 +1,22 @@
+==960== NVPROF is profiling process 960, command: ./radix_sort
+==960== Profiling application: ./radix_sort
+==960== Profiling result:
+"Type","Time(%)","Time","Calls","Avg","Min","Max","Name"
+,%,ms,,ms,ms,ms,
+"GPU activities",56.779896,1206.454629,8,150.806828,150.793133,150.818828,"gpu_radix_sort_local(unsigned int*, unsigned int*, unsigned int*, unsigned int, unsigned int*, unsigned int, unsigned int)"
+"GPU activities",15.408753,327.403935,1,327.403935,327.403935,327.403935,"[CUDA memcpy HtoD]"
+"GPU activities",15.156265,322.039092,2,161.019546,0.078817,321.960275,"[CUDA memcpy DtoH]"
+"GPU activities",11.042673,234.633816,8,29.329227,29.276279,29.404184,"gpu_glbl_shuffle(unsigned int*, unsigned int*, unsigned int*, unsigned int*, unsigned int, unsigned int, unsigned int)"
+"GPU activities",0.767053,16.298274,32,0.509321,0.006944,2.005884,"gpu_prescan(unsigned int*, unsigned int const *, unsigned int*, unsigned int, unsigned int, unsigned int)"
+"GPU activities",0.602979,12.812050,1,12.812050,12.812050,12.812050,"gpu_groups(unsigned int*, unsigned int*, int, int, unsigned int)"
+"GPU activities",0.234857,4.990212,24,0.207925,0.002368,0.616840,"gpu_add_block_sums(unsigned int*, unsigned int const *, unsigned int*, unsigned long)"
+"GPU activities",0.004447,0.094496,60,0.001574,0.000896,0.002656,"[CUDA memset]"
+"GPU activities",0.003077,0.065376,16,0.004086,0.001856,0.006656,"[CUDA memcpy DtoD]"
+"API calls",70.065138,1659.789005,54,30.736833,0.004078,182.229352,"cudaFree"
+"API calls",29.208795,691.933796,19,36.417568,0.008601,351.368028,"cudaMemcpy"
+"API calls",0.416534,9.867372,73,0.135169,0.005861,9.285561,"cudaLaunch"
+"API calls",0.288078,6.824337,54,0.126376,0.004381,1.489040,"cudaMalloc"
+"API calls",0.017748,0.420443,60,0.007007,0.002349,0.031671,"cudaMemset"
+"API calls",0.002621,0.062085,405,0.000153,0.000112,0.003539,"cudaSetupArgument"
+"API calls",0.000970,0.022984,73,0.000314,0.000206,0.001076,"cudaConfigureCall"
+"API calls",0.000116,0.002742,1,0.002742,0.002742,0.002742,"cudaSetDevice"

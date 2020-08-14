@@ -27,6 +27,10 @@ extern "C" bool providedCpu(unsigned int* in, size_t len);
 // Generate pseudorandom numbers quickly
 extern "C" void populateInput(uint32_t *arr, size_t nelem);
 
+extern "C" bool providedCpu(unsigned int* in, size_t len);
+extern "C" bool gpuPartialProfile(uint32_t* h_in, uint32_t *boundaries, size_t h_in_len, uint32_t offset, uint32_t width);
+extern "C" bool providedGpuProfile(unsigned int* h_in, size_t h_in_len);
+
 #else
 
 bool initLibSort(void);
@@ -34,6 +38,11 @@ bool gpuPartial(uint32_t* h_in, uint32_t *boundaries, size_t h_in_len, uint32_t 
 bool providedGpu(unsigned int* h_in, size_t len);
 bool providedCpu(unsigned int* in, size_t len);
 void populateInput(uint32_t *arr, size_t nelem);
+
+bool providedCpu(unsigned int* in, size_t len);
+bool gpuPartialProfile(uint32_t* h_in, uint32_t *boundaries, size_t h_in_len, uint32_t offset, uint32_t width);
+bool providedGpuProfile(unsigned int* h_in, size_t h_in_len);
+
 
 #endif //__cplusplus
 

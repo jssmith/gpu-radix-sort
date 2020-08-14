@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <cuda_runtime.h>
+#include <cuda_profiler_api.h>
 #include <algorithm>
 #include <atomic>
 
@@ -60,4 +61,18 @@ extern "C" bool providedGpu(unsigned int* h_in, size_t h_in_len)
 extern "C" bool providedCpu(unsigned int* in, size_t len) {
     std::sort(in, in + len);
     return true;
+}
+
+extern "C" bool gpuPartialProfile(uint32_t* h_in, uint32_t *boundaries, size_t h_in_len, uint32_t offset, uint32_t width) {
+  cudaProfilerStart();
+  auto ret = gpuPartial(h_in, boundaries, h_in_len, offset, width);
+  cudaProfilerStop();
+  return ret;
+}
+
+extern "C" bool providedGpuProfile(unsigned int* h_in, size_t h_in_len) {
+  cudaProfilerStart();
+  auto ret = providedGpu(h_in, h_in_len);
+  cudaProfilerStop();
+  return ret;
 }

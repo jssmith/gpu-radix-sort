@@ -40,7 +40,8 @@ bool partialSort(uint32_t *data, size_t len, int32_t offset, int32_t width) {
 
   timer tTotal = timer();
   tTotal.start();
-  bool ret = gpuPartial(data, boundaries, len, offset, width);
+  // bool ret = gpuPartial(data, boundaries, len, offset, width);
+  bool ret = gpuPartialProfile(data, boundaries, len, offset, width);
   tTotal.stop();
 
   printf("Partial sort (%db) Device Local Sort Statistics:\n", width);
@@ -208,7 +209,7 @@ bool runBenches(void)
   //   return false;
   // }
 
-  int32_t width = 8;
+  int32_t width = 16;
   printf("Running Partial Single-Device test (%db):\n", width);
   memcpy(test, orig, NMAX_PER_DEV*sizeof(unsigned int));
   success = partialSort(test, NMAX_PER_DEV, 0, width);

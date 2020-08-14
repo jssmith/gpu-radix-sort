@@ -126,7 +126,8 @@ def main():
         pr.enable()
         resp = f(req)
         pr.disable()
-        printCSV(pr, "./faas8b.csv")
+        printCSV(pr, "./faas{}b.csv".format(width))
+        pr.dump_stats("./faas{}b.prof".format(width))
 
         # cProfile.runctx("f(req)", globals=globals(), locals=locals(), sort="cumulative", filename="16b.prof")
         print(time.time() - start)
