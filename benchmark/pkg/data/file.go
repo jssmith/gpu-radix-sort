@@ -35,7 +35,7 @@ func NewFileArrayFactory(rootDir string) *ArrayFactory {
 
 // Stores a distributed array in the filesystem (in the directory at RootPath).
 // There are two files:
-//		meta.dat: stores metadata about the array. First 'lens', then 'caps'
+//		meta.json: stores metadata about the array. First 'lens', then 'caps'
 //			(file size can be used to dermine the number of partitions)
 //		data.dat: Stores the actual data, each partition starts at offset
 //			starts[partID] in the file.
@@ -146,7 +146,7 @@ func CreateFileDistribArray(rootPath string, shape DistribArrayShape) (*FileDist
 func (self *FileDistribArray) commitMeta() error {
 	jsonShape := fileShape{Lens: self.shape.lens, Caps: self.shape.caps}
 
-	metaPath := filepath.Join(self.RootPath, "meta.dat")
+	metaPath := filepath.Join(self.RootPath, "meta.json")
 	metaFile, err := os.OpenFile(metaPath, os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		return errors.Wrapf(err, "Failed to create metdata file")
@@ -168,7 +168,7 @@ func (self *FileDistribArray) commitMeta() error {
 }
 
 func (self *FileDistribArray) loadMeta() error {
-	metaPath := filepath.Join(self.RootPath, "meta.dat")
+	metaPath := filepath.Join(self.RootPath, "meta.json")
 	metaFile, err := os.OpenFile(metaPath, os.O_CREATE, 0600)
 	if err != nil {
 		return errors.Wrap(err, "Failed to create metdata file")

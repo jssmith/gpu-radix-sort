@@ -3,6 +3,7 @@ module github.com/nathantp/gpu-radix-sort/benchmark
 go 1.13
 
 require (
+	github.com/docker/distribution v2.7.1+incompatible
 	github.com/go-delve/delve v1.4.1 // indirect
 	github.com/google/pprof v0.0.0-20200708004538-1a94d8640e99 // indirect
 	github.com/ianlancetaylor/demangle v0.0.0-20200715173712-053cf528c12f // indirect

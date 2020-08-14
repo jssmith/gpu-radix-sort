@@ -9,6 +9,8 @@ import operator
 import json
 import numpy as np
 
+# ol-install: numpy
+
 from . import __state
 
 FileDistribArrayMount = pathlib.Path("/shared")

@@ -16,57 +16,6 @@ import (
 // per unique radix value. Array names will be prefixed with baseName.
 type DistribWorker func(inBkts []*data.PartRef, offset int, width int, baseName string, factory *data.ArrayFactory) (data.DistribArray, error)
 
-// XXX Since DistribArray's were refactored to have fixed-sized partitions, we
-// can no longer pre-create it on the host, the client has to do it since only
-// the client knows the partition sizes. This is fine with local workers, but
-// Docker permissions make it difficult in FaaS. We're going to have to figure
-// something out to make files created on the worker readible by the host
-// (maybe just 777 for now, not ideal).
-
-// Returns a DistribWorker that uses mgr to sort via FaaS
-// func InitFaasWorker(mgr *srkmgr.SrkManager) DistribWorker {
-// 	return func(inBkts []*data.PartRef,
-// 		offset int, width int, baseName string,
-// 		factory data.ArrayFactory) (data.DistribArray, error) {
-//
-// 		var err error
-//
-// 		nBucket := 1 << width
-//
-// 		faasRefs := make([]*faas.FaasFilePartRef, len(inBkts))
-// 		for i, bktRef := range inBkts {
-// 			faasRefs[i], err = faas.FilePartRefToFaas(bktRef)
-// 		}
-//
-// 		// Generate output array on host side to avoid permissions errors from Docker
-// 		shape := data.CreateShape
-// 		outArr, err := factory.Create(baseName+"_output", nBucket)
-// 		if err != nil {
-// 			return nil, errors.Wrap(err, "Could not allocate output")
-// 		}
-//
-// 		fileArr, ok := outArr.(*data.FileDistribArray)
-// 		if !ok {
-// 			return nil, fmt.Errorf("Unsupported DistribArray type %T: Only FileRefPart's are supported", outArr)
-// 		}
-//
-// 		faasArg := &faas.FaasArg{
-// 			Offset:  offset,
-// 			Width:   width,
-// 			ArrType: "file",
-// 			Input:   faasRefs,
-// 			Output:  filepath.Base(fileArr.RootPath),
-// 		}
-//
-// 		err = faas.InvokeFaasSort(mgr, faasArg)
-// 		if err != nil {
-// 			return nil, errors.Wrap(err, "FaaS sort failure")
-// 		}
-//
-// 		return outArr, nil
-// 	}
-// }
-
 func LocalDistribWorker(inBkts []*data.PartRef, offset int, width int, baseName string, factory *data.ArrayFactory) (data.DistribArray, error) {
 	var err error
 

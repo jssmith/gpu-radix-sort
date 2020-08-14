@@ -35,6 +35,20 @@ class timer {
     int64_t totalTime = 0;
 };
 
+bool partialSort(uint32_t *data, size_t len, int32_t offset, int32_t width) {
+  uint32_t *boundaries = new uint32_t[1 << width];
+
+  timer tTotal = timer();
+  tTotal.start();
+  bool ret = gpuPartial(data, boundaries, len, offset, width);
+  tTotal.stop();
+
+  printf("Partial sort (%db) Device Local Sort Statistics:\n", width);
+  printf("\tData Size:  %lfMiB\n", (double)(len * sizeof(unsigned int)) / (1024*1024));
+  printf("\tTotal Time: %jdms\n", tTotal.report());
+  return ret;
+}
+
 bool singleSort(uint32_t *data, size_t len)
 {
   timer tTotal = timer();
@@ -187,12 +201,28 @@ bool runBenches(void)
   //   return false;
   // }
 
-  printf("Running Local Single-Device test:\n");
+  // printf("Running Local Single-Device test:\n");
+  // memcpy(test, orig, NMAX_PER_DEV*sizeof(unsigned int));
+  // success = singleSort(test, NMAX_PER_DEV);
+  // if(!success) {
+  //   return false;
+  // }
+
+  int32_t width = 8;
+  printf("Running Partial Single-Device test (%db):\n", width);
   memcpy(test, orig, NMAX_PER_DEV*sizeof(unsigned int));
-  success = singleSort(test, NMAX_PER_DEV);
+  success = partialSort(test, NMAX_PER_DEV, 0, width);
   if(!success) {
     return false;
   }
+
+  // width = 16;
+  // printf("Running Partial Single-Device test (%db):\n", width);
+  // memcpy(test, orig, NMAX_PER_DEV*sizeof(unsigned int));
+  // success = partialSort(test, NMAX_PER_DEV, 0, width);
+  // if(!success) {
+  //   return false;
+  // }
 
   delete[] test;
   delete[] orig;

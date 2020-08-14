@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"math"
-	"sort"
 	"sync"
 	"testing"
 	"time"
@@ -85,46 +84,6 @@ func TestParallel(t *testing.T) {
 		}
 	})
 
-}
-
-// Make sure the partial sort worked and set the boundaries correctly
-func checkPartial(t *testing.T, testBytes []byte, boundaries []int64, origBytes []byte) {
-	var err error
-
-	require.Equal(t, len(origBytes), len(testBytes), "Test array has the wrong length")
-
-	test := make([]uint32, len(testBytes)/4)
-	orig := make([]uint32, len(origBytes)/4)
-
-	intLen := len(test)
-
-	err = binary.Read(bytes.NewReader(origBytes), binary.LittleEndian, orig)
-	require.Nil(t, err, "Couldn't interpret orig")
-
-	err = binary.Read(bytes.NewReader(testBytes), binary.LittleEndian, test)
-	require.Nil(t, err, "Couldn't interpret test")
-
-	// len(boundaries) is 2^radixWidth, -1 gives us ones for the first width bits
-	mask := (uint32)(len(boundaries) - 1)
-
-	boundaries = append(boundaries, (int64)(len(testBytes)))
-	curBucket := (uint32)(0)
-	for i := 0; i < intLen; i++ {
-		for i == (int)(boundaries[curBucket+1])/4 {
-			curBucket++
-		}
-
-		bucket := test[i] & mask
-		require.Equal(t, curBucket, bucket, "Buckets not in order")
-	}
-
-	// Make sure all the right values are in the output, the sort here is just
-	// to compare set membership.
-	sort.Slice(orig, func(i, j int) bool { return orig[i] < orig[j] })
-	sort.Slice(test, func(i, j int) bool { return test[i] < test[j] })
-	for i := 0; i < intLen; i++ {
-		require.Equalf(t, orig[i], test[i], "output does not contain all the same values as the input at index %v", i)
-	}
 }
 
 // test the go wrapper for libsort.gpupartial(), we don't go out of our way to

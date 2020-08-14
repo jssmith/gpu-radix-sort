@@ -3,11 +3,9 @@ package benchmark
 import (
 	"fmt"
 	"io"
-	"os"
 	"time"
 
 	"github.com/serverlessresearch/srk/pkg/srkmgr"
-	"github.com/sirupsen/logrus"
 	"gonum.org/v1/gonum/stat"
 )
 
@@ -61,23 +59,6 @@ func ReportStats(stats SortStats, writer io.Writer) {
 		fmt.Fprintf(writer, "%v (mean):\t%vs\n", name, mean/1e9)
 		fmt.Fprintf(writer, "%v (std):\t%vs\n", name, stdev/1e9)
 	}
-}
-
-// Creates a new srk manager (interface to SRK). Be sure to call mgr.Destroy()
-// to clean up (failure to do so may require manual cleanup for open-lambda)
-func GetMgr() *srkmgr.SrkManager {
-	mgrArgs := map[string]interface{}{}
-	mgrArgs["config-file"] = "./srk.yaml"
-	srkLogger := logrus.New()
-	srkLogger.SetLevel(logrus.WarnLevel)
-	mgrArgs["logger"] = srkLogger
-
-	mgr, err := srkmgr.NewManager(mgrArgs)
-	if err != nil {
-		fmt.Printf("Failed to initialize: %v\n", err)
-		os.Exit(1)
-	}
-	return mgr
 }
 
 func printCSV(m map[string]float64) {

@@ -16,9 +16,11 @@ func TestFaasFilePartRef(t *testing.T) {
 	require.Nilf(t, err, "Couldn't create temporary test directory")
 	defer os.RemoveAll(tmpDir)
 
-	origRootPath := filepath.Join(tmpDir, "TestFileDistribArrBytes")
+	factory := data.NewFileArrayFactory(tmpDir)
+	origRootPath := filepath.Join(tmpDir, "TestFaasFilePartRef")
 
-	arr, err := data.NewFileDistribArray(origRootPath, 2)
+	shape := data.CreateShapeUniform((int64)(0), 2)
+	arr, err := factory.Create("TestFaasFilePartRef", shape)
 	require.Nilf(t, err, "Failed to initialize array: %v", err)
 
 	localRef := &data.PartRef{Arr: arr, PartIdx: 0, Start: 1, NByte: 2}
@@ -52,4 +54,6 @@ func TestFaasFilePartRef(t *testing.T) {
 
 		require.Equal(t, *faasRef, newFaasRef, "FaaS Ref changed when passing through JSON")
 	})
+
+	arr.Destroy()
 }

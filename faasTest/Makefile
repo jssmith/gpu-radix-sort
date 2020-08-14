@@ -9,6 +9,7 @@ handler: f.py ../libsort/libsort.so
 	cp -r pylibsort ${HANDLER_DIR}/
 
 install: handler
+	srk function remove --function-name radixsort
 	srk function create --source ${HANDLER_DIR} --function-name radixsort
 
 clean:

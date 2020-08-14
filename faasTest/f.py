@@ -10,10 +10,26 @@ import tempfile
 import functools
 import operator
 import time
-import numpy as np
+import numpy
+
+# ol-install: numpy
 
 # from memory_profiler import profile
 import cProfile
+import pstats
+import io
+
+def printCSV(pr, path):
+    result = io.StringIO()
+    # pstats.Stats(pr,stream=result).print_stats()
+    pstats.Stats(pr,stream=result).sort_stats(pstats.SortKey.CUMULATIVE).print_stats()
+    result=result.getvalue()
+    # chop the string into a csv-like buffer
+    result='ncalls'+result.split('ncalls')[-1]
+    result='\n'.join([','.join(line.rstrip().split(None,5)) for line in result.split('\n')])
+    
+    with open(path, 'w') as f:
+        f.write(result)
 
 # Ideally this would be set somewhere else (e.g. in AWS lambda you can put
 # it in /var) but for now this works.
@@ -31,9 +47,13 @@ def f(event):
                 "err" : "Function currently only supports file distributed arrays"
                 }
 
+    # p = sp.run("ls -l /shared/initial", shell=True, stdout=sp.PIPE, universal_newlines=True)
+    # return {
+    #         "success" : False,
+    #         "err" : p.stdout 
+    #         }
+
     refs = pylibsort.getPartRefs(event)
-    # rawBytes = functools.reduce(operator.iconcat,
-    #                 map(operator.methodcaller('read'), refs))
     rawBytes = pylibsort.readPartRefs(refs)
 
     try:
@@ -59,8 +79,8 @@ def main():
     # nElem = 1024*1024
     nbyte = nElem*4
     offset = 0
-    # width = 8
-    width = 16
+    width = 8
+    # width = 16
     narr = 2
     npart = 2
     bytesPerPart = int(nbyte / (narr * npart))
@@ -102,21 +122,25 @@ def main():
         }
 
         start = time.time()
-        # resp = f(req)
-        cProfile.runctx("f(req)", globals=globals(), locals=locals(), sort="cumulative", filename="16b.prof")
+        pr = cProfile.Profile()
+        pr.enable()
+        resp = f(req)
+        pr.disable()
+        printCSV(pr, "./faas8b.csv")
+
+        # cProfile.runctx("f(req)", globals=globals(), locals=locals(), sort="cumulative", filename="16b.prof")
         print(time.time() - start)
-    #     if not resp['success']:
-    #         print("FAILURE: Function returned error: " + resp['err'])
-    #         exit(1)
-    #
-    #     outArr = pylibsort.fileDistribArray.Open(tDir / outArrName)
-    #     outBuf = outArr.ReadAll()
-    #     boundaries = outArr.shape.starts
-    #
-    #     outArr.Destroy()
-    #
-    # pylibsort.checkPartial(inBuf, outBuf, outArr.shape.caps, offset, width)
-    # cProfile.runctx("pylibsort.checkPartial(inBuf, outBuf, outArr.shape.caps, offset, width)", globals=globals(), locals=locals(),sort="cumulative")
+        if not resp['success']:
+            print("FAILURE: Function returned error: " + resp['err'])
+            exit(1)
+
+        outArr = pylibsort.fileDistribArray.Open(tDir / outArrName)
+        outBuf = outArr.ReadAll()
+        boundaries = outArr.shape.starts
+
+        outArr.Destroy()
+
+    pylibsort.checkPartial(inBuf, outBuf, outArr.shape.caps, offset, width)
 
     print("PASS")
 
