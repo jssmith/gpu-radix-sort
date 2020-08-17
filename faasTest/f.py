@@ -19,7 +19,11 @@ import cProfile
 import pstats
 import io
 
+doProfile = True 
+
 def printCSV(pr, path):
+    path = pathlib.Path(path)
+
     result = io.StringIO()
     # pstats.Stats(pr,stream=result).print_stats()
     pstats.Stats(pr,stream=result).sort_stats(pstats.SortKey.CUMULATIVE).print_stats()
@@ -38,7 +42,6 @@ if pathlib.Path('/handler/libsort.so').exists():
     os.environ['LD_LIBRARY_PATH'] = '/handler'
 import pylibsort
 
-# @profile
 def f(event):
     # Temporary limitation for testing
     if event['arrType'] != 'file':
@@ -46,12 +49,6 @@ def f(event):
                 "success" : False,
                 "err" : "Function currently only supports file distributed arrays"
                 }
-
-    # p = sp.run("ls -l /shared/initial", shell=True, stdout=sp.PIPE, universal_newlines=True)
-    # return {
-    #         "success" : False,
-    #         "err" : p.stdout 
-    #         }
 
     refs = pylibsort.getPartRefs(event)
     rawBytes = pylibsort.readPartRefs(refs)
@@ -71,7 +68,6 @@ def f(event):
             "err" : "" 
            }
 
-# @profile
 def main():
     """Main only used for testing purposes"""
     # nElem = 256 
@@ -121,16 +117,18 @@ def main():
                 "output" : outArrName
         }
 
-        start = time.time()
-        pr = cProfile.Profile()
-        pr.enable()
-        resp = f(req)
-        pr.disable()
-        printCSV(pr, "./faas{}b.csv".format(width))
-        pr.dump_stats("./faas{}b.prof".format(width))
+        if doProfile:
+            pr = cProfile.Profile()
+            pr.enable()
+            resp = f(req)
+            pr.disable()
+            printCSV(pr, "./faas{}b.csv".format(width))
+            pr.dump_stats("./faas{}b.prof".format(width))
+        else:
+            start = time.time()
+            resp = f(req)
+            print(time.time() - start)
 
-        # cProfile.runctx("f(req)", globals=globals(), locals=locals(), sort="cumulative", filename="16b.prof")
-        print(time.time() - start)
         if not resp['success']:
             print("FAILURE: Function returned error: " + resp['err'])
             exit(1)
@@ -146,6 +144,44 @@ def main():
     print("PASS")
 
 
+def directInvoke():
+    """Call this to directly invoke the function from the command line instead
+    of through a FaaS provider, it expects the arguments to be in JSON as
+    argv[1]. This function behaves as a main(); it calls exit() directly and
+    never returns."""
+
+    dataDir = os.environ.get('OL_SHARED_VOLUME', "")
+    if dataDir == "":
+        print(json.dumps({ "success" : False, "err" : "OL_SHARED_VOLUME not set, set it to the shared directory for distrib arrays"}))
+        exit(1)
+    pylibsort.SetDistribMount(pathlib.Path(dataDir))
+
+    
+    try:
+        jsonCmd = sys.stdin.read()
+        cmd = json.loads(jsonCmd)
+    except Exception as e:
+        print(json.dumps({ "success" : False, "err" : "Argument parsing error: " + str(e) }))
+        exit(1)
+
+    resp = None
+    if doProfile:
+        pr = cProfile.Profile()
+        pr.enable()
+        resp = f(cmd)
+        pr.disable()
+        printCSV(pr, "./faas{}.csv".format(cmd['output']))
+        pr.dump_stats("./faas{}.prof".format(cmd['output']))
+    else:
+        resp = f(cmd)
+
+    print(json.dumps(resp))
+    if resp['success']:
+        exit(0)
+    else:
+        exit(1)
+ 
+
 # @profile
 def testGenerate():
     # sz = 256*1024*1024
@@ -160,6 +196,6 @@ def testGenerate():
 
 
 if __name__ == "__main__":
-    # cProfile.run('main()', sort='cumulative')
-    main()
+    # main()
+    directInvoke()
     # testGenerate()

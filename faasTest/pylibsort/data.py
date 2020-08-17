@@ -121,6 +121,7 @@ class fileDistribArray(DistribArray):
         self.rootPath = pathlib.Path(rootPath)
         self.datPath = self.rootPath / 'data.dat'
         self.metaPath = self.rootPath / 'meta.json'
+        self.closed = False
 
 
     def __commitMeta(self):
@@ -162,8 +163,11 @@ class fileDistribArray(DistribArray):
 
 
     def Close(self):
-        self.dataF.close()
-        self.__commitMeta()
+        # Being idempotent just makes things easier
+        if not self.closed:
+            self.dataF.close()
+            self.__commitMeta()
+            self.closed = True
 
 
     def Destroy(self):
@@ -178,7 +182,7 @@ class fileDistribArray(DistribArray):
             nbyte = self.shape.lens[partID] - start
 
         if start > self.shape.lens[partID] or start+nbyte > self.shape.lens[partID]:
-            raise DistribArrayError("Read beyond end of partition (asked for {}+{}, limit {}".format(start, nbyte, self.shape.lens[partID])) 
+            raise DistribArrayError("Read beyond end of partition {} (asked for {}+{}, limit {}".format(partID, start, nbyte, self.shape.lens[partID])) 
 
         self.dataF.seek(self.shape.starts[partID] + start)
 
@@ -235,10 +239,19 @@ class partRef():
         else:
             return self.arr.ReadPart(self.partID, start=self.start, nbyte=self.nbyte, dest=dest)
 
+# {arrayName : fileDistribArray}, minimize the number of re-opened files. This
+# makes the partRefs list non-threadsafe and makes it so you have to close all
+# or none, closing one may close many others.
+openArrs = {}
 
 def __fileGetRef(req) -> partRef:
     """Return a partRef from an entry in the 'input' field of a req"""
-    arr = fileDistribArray.Open(FileDistribArrayMount / req['arrayName'])
+    arr = None
+    if req['arrayName'] in openArrs:
+        arr = openArrs[req['arrayName']]
+    else:
+        arr = fileDistribArray.Open(FileDistribArrayMount / req['arrayName'])
+        openArrs[req['arrayName']] = arr
 
     # Internally, it's easier to work with absolute numbers, so we convert -1
     # nbyte's from the request into their real value

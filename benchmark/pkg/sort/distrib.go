@@ -101,8 +101,8 @@ func SortDistribFromArr(arr data.DistribArray, sz int, baseName string,
 	nworker := 2 //number of workers (degree of parallelism)
 	// nworker := 1 //number of workers (degree of parallelism)
 	// width := 4 //number of bits to sort per round
-	width := 8 //number of bits to sort per round
-	// width := 16           //number of bits to sort per round
+	// width := 8 //number of bits to sort per round
+	width := 16           //number of bits to sort per round
 	nstep := (32 / width) // number of steps needed to fully sort
 
 	// Target number of bytes to process per worker, the last worker might get less
@@ -205,6 +205,7 @@ func SortDistribFromRaw(inRaw []byte, baseName string,
 	}
 	writer.Close()
 
+	origArr.Close()
 	outArrs, err := SortDistribFromArr(origArr, len(inRaw), baseName, factory, worker)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to sort distribArrays")

@@ -19,6 +19,13 @@ extern "C" bool gpuPartial(uint32_t* h_in, uint32_t *boundaries, size_t h_in_len
       return false;
     }
 
+    int v;
+    auto res = cudaDeviceGetAttribute(&v, cudaDevAttrPciBusId, 0);
+    if(res != cudaSuccess) {
+      fprintf(stderr, "Failed to get attr: %s\n", cudaGetErrorString(res));
+      return false;
+    }
+
     //The sort internally only supports 32bit sizes
     if(h_in_len > UINT32_MAX) {
       fprintf(stderr, "Input array length must be less than 2^32\n");

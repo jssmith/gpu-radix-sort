@@ -1,3 +1,4 @@
+export RADIXBENCH_ROOTPATH=$( realpath $(dirname ${BASH_SOURCE[0]}) )
 
 # Normally this wouldn't be necessary but python's ctypes.util.find_library
 # breaks if there is a leading colon (e.g. ":/path/to/lib") which happens if

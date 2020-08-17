@@ -350,6 +350,8 @@ func DistribWorkerTest(t *testing.T, factory *data.ArrayFactory, worker DistribW
 	PartRefs := []*data.PartRef{&data.PartRef{Arr: origArr, PartIdx: 0, Start: 0, NByte: (nElem / 2) * 4},
 		&data.PartRef{Arr: origArr, PartIdx: 0, Start: (nElem / 2) * 4, NByte: (nElem - (nElem / 2)) * 4}}
 
+	origArr.Close()
+
 	outArr, err := worker(PartRefs, 0, width, "testDistribWorker", factory)
 	require.Nil(t, err)
 
