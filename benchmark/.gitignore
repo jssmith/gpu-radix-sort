@@ -1,2 +1,4 @@
 /benchmark
 srk.yaml
+*.csv
+*.prof

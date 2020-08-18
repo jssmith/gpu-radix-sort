@@ -1,0 +1,111 @@
+ncalls,tottime,percall,cumtime,percall,filename:lineno(function)
+1,0.003,0.003,4.944,4.944,/scratch/nathanp/gpu-radix-sort/faasTest/f.py:45(f)
+1,2.437,2.437,2.437,2.437,/scratch/nathanp/gpu-radix-sort/faasTest/pylibsort/sort.py:108(sortPartial)
+1,0.000,0.000,1.665,1.665,/scratch/nathanp/gpu-radix-sort/faasTest/pylibsort/data.py:301(writeOutput)
+1,0.000,0.000,1.126,1.126,/scratch/nathanp/gpu-radix-sort/faasTest/pylibsort/data.py:165(Close)
+1,0.952,0.952,1.125,1.125,/scratch/nathanp/gpu-radix-sort/faasTest/pylibsort/data.py:127(__commitMeta)
+1,0.160,0.160,0.670,0.670,/scratch/nathanp/gpu-radix-sort/faasTest/pylibsort/data.py:265(readPartRefs)
+65540,0.036,0.000,0.510,0.000,/scratch/nathanp/gpu-radix-sort/faasTest/pylibsort/data.py:236(read)
+1,0.000,0.000,0.508,0.508,/scratch/nathanp/gpu-radix-sort/faasTest/pylibsort/data.py:215(WriteAll)
+1,0.507,0.507,0.507,0.507,{method 'write' of '_io.BufferedRandom' objects}
+65540,0.079,0.000,0.474,0.000,/scratch/nathanp/gpu-radix-sort/faasTest/pylibsort/data.py:177(ReadPart)
+65540,0.322,0.000,0.322,0.000,{method 'readinto' of '_io.BufferedRandom' objects}
+1,0.032,0.032,0.174,0.174,/home/eecs/nathanp/anaconda3/lib/python3.7/json/__init__.py:120(dump)
+1,0.000,0.000,0.168,0.168,/scratch/nathanp/gpu-radix-sort/faasTest/pylibsort/data.py:280(getPartRefs)
+1,0.010,0.010,0.168,0.168,/scratch/nathanp/gpu-radix-sort/faasTest/pylibsort/data.py:284(<listcomp>)
+65540,0.066,0.000,0.158,0.000,/scratch/nathanp/gpu-radix-sort/faasTest/pylibsort/data.py:247(__fileGetRef)
+131082,0.019,0.000,0.121,0.000,/home/eecs/nathanp/anaconda3/lib/python3.7/json/encoder.py:413(_iterencode)
+131082,0.019,0.000,0.102,0.000,/home/eecs/nathanp/anaconda3/lib/python3.7/json/encoder.py:333(_iterencode_dict)
+131076,0.060,0.000,0.083,0.000,/home/eecs/nathanp/anaconda3/lib/python3.7/json/encoder.py:277(_iterencode_list)
+65541,0.073,0.000,0.073,0.000,{method 'seek' of '_io.BufferedRandom' objects}
+2,0.000,0.000,0.048,0.024,/scratch/nathanp/gpu-radix-sort/faasTest/pylibsort/data.py:149(Open)
+4,0.041,0.010,0.046,0.011,/scratch/nathanp/gpu-radix-sort/faasTest/pylibsort/data.py:35(__init__)
+65540,0.044,0.000,0.044,0.000,/scratch/nathanp/gpu-radix-sort/faasTest/pylibsort/data.py:230(__init__)
+2,0.000,0.000,0.025,0.012,/home/eecs/nathanp/anaconda3/lib/python3.7/json/__init__.py:274(load)
+2,0.000,0.000,0.023,0.012,/home/eecs/nathanp/anaconda3/lib/python3.7/json/__init__.py:299(loads)
+2,0.000,0.000,0.023,0.012,/home/eecs/nathanp/anaconda3/lib/python3.7/json/decoder.py:332(decode)
+2,0.023,0.011,0.023,0.011,/home/eecs/nathanp/anaconda3/lib/python3.7/json/decoder.py:343(raw_decode)
+262183,0.022,0.000,0.022,0.000,{built-in method builtins.isinstance}
+131081,0.021,0.000,0.021,0.000,{method 'write' of '_io.TextIOWrapper' objects}
+1,0.000,0.000,0.012,0.012,/scratch/nathanp/gpu-radix-sort/faasTest/pylibsort/data.py:133(Create)
+1,0.000,0.000,0.012,0.012,/scratch/nathanp/gpu-radix-sort/faasTest/pylibsort/data.py:58(fromCaps)
+4,0.004,0.001,0.004,0.001,{built-in method numpy.array}
+11,0.004,0.000,0.004,0.000,{method 'copy' of 'list' objects}
+5,0.002,0.000,0.002,0.000,{built-in method builtins.sum}
+2,0.001,0.000,0.002,0.001,{method 'read' of '_io.TextIOWrapper' objects}
+1,0.002,0.002,0.002,0.002,{method 'tolist' of 'numpy.ndarray' objects}
+2,0.000,0.000,0.001,0.000,/home/eecs/nathanp/anaconda3/lib/python3.7/codecs.py:319(decode)
+2,0.001,0.000,0.001,0.000,{built-in method _codecs.utf_8_decode}
+1,0.000,0.000,0.001,0.001,<__array_function__ internals>:2(diff)
+3/1,0.000,0.000,0.001,0.001,{built-in method numpy.core._multiarray_umath.implement_array_function}
+1,0.000,0.000,0.001,0.001,/home/eecs/nathanp/anaconda3/lib/python3.7/site-packages/numpy/lib/function_base.py:1147(diff)
+6,0.000,0.000,0.000,0.000,{built-in method io.open}
+1,0.000,0.000,0.000,0.000,<__array_function__ internals>:2(concatenate)
+9,0.000,0.000,0.000,0.000,/home/eecs/nathanp/anaconda3/lib/python3.7/pathlib.py:907(__truediv__)
+9,0.000,0.000,0.000,0.000,/home/eecs/nathanp/anaconda3/lib/python3.7/pathlib.py:694(_make_child)
+12,0.000,0.000,0.000,0.000,/home/eecs/nathanp/anaconda3/lib/python3.7/pathlib.py:640(_parse_args)
+3,0.000,0.000,0.000,0.000,/scratch/nathanp/gpu-radix-sort/faasTest/pylibsort/data.py:118(__init__)
+2,0.000,0.000,0.000,0.000,/home/eecs/nathanp/anaconda3/lib/python3.7/pathlib.py:1228(touch)
+12,0.000,0.000,0.000,0.000,/home/eecs/nathanp/anaconda3/lib/python3.7/pathlib.py:63(parse_parts)
+13,0.000,0.000,0.000,0.000,/home/eecs/nathanp/anaconda3/lib/python3.7/pathlib.py:710(__fspath__)
+1,0.000,0.000,0.000,0.000,/home/eecs/nathanp/anaconda3/lib/python3.7/pathlib.py:1251(mkdir)
+1,0.000,0.000,0.000,0.000,{built-in method posix.mkdir}
+13,0.000,0.000,0.000,0.000,/home/eecs/nathanp/anaconda3/lib/python3.7/pathlib.py:700(__str__)
+3,0.000,0.000,0.000,0.000,/home/eecs/nathanp/anaconda3/lib/python3.7/pathlib.py:1007(__new__)
+3,0.000,0.000,0.000,0.000,/home/eecs/nathanp/anaconda3/lib/python3.7/pathlib.py:660(_from_parts)
+2,0.000,0.000,0.000,0.000,/home/eecs/nathanp/anaconda3/lib/python3.7/pathlib.py:1341(exists)
+1,0.000,0.000,0.000,0.000,<__array_function__ internals>:2(broadcast_to)
+2,0.000,0.000,0.000,0.000,{built-in method posix.utime}
+1,0.000,0.000,0.000,0.000,/home/eecs/nathanp/anaconda3/lib/python3.7/site-packages/numpy/lib/stride_tricks.py:143(broadcast_to)
+2,0.000,0.000,0.000,0.000,/home/eecs/nathanp/anaconda3/lib/python3.7/pathlib.py:1163(stat)
+1,0.000,0.000,0.000,0.000,/home/eecs/nathanp/anaconda3/lib/python3.7/site-packages/numpy/lib/stride_tricks.py:116(_broadcast_to)
+2,0.000,0.000,0.000,0.000,{built-in method posix.stat}
+2,0.000,0.000,0.000,0.000,/home/eecs/nathanp/anaconda3/lib/python3.7/pathlib.py:1048(_raw_open)
+2,0.000,0.000,0.000,0.000,{built-in method posix.open}
+9,0.000,0.000,0.000,0.000,/home/eecs/nathanp/anaconda3/lib/python3.7/pathlib.py:683(_format_parsed_parts)
+1,0.000,0.000,0.000,0.000,/home/eecs/nathanp/anaconda3/lib/python3.7/ctypes/__init__.py:374(__getattr__)
+9,0.000,0.000,0.000,0.000,/home/eecs/nathanp/anaconda3/lib/python3.7/pathlib.py:673(_from_parsed_parts)
+21,0.000,0.000,0.000,0.000,/home/eecs/nathanp/anaconda3/lib/python3.7/pathlib.py:291(splitroot)
+3,0.000,0.000,0.000,0.000,/home/eecs/nathanp/anaconda3/lib/python3.7/_bootlocale.py:33(getpreferredencoding)
+1,0.000,0.000,0.000,0.000,{built-in method _ctypes.POINTER}
+1,0.000,0.000,0.000,0.000,{method 'close' of '_io.BufferedRandom' objects}
+1,0.000,0.000,0.000,0.000,/home/eecs/nathanp/anaconda3/lib/python3.7/json/encoder.py:204(iterencode)
+1,0.000,0.000,0.000,0.000,/home/eecs/nathanp/anaconda3/lib/python3.7/ctypes/__init__.py:381(__getitem__)
+3,0.000,0.000,0.000,0.000,{built-in method _locale.nl_langinfo}
+4,0.000,0.000,0.000,0.000,{method 'match' of 're.Pattern' objects}
+18,0.000,0.000,0.000,0.000,{built-in method builtins.len}
+1,0.000,0.000,0.000,0.000,/home/eecs/nathanp/anaconda3/lib/python3.7/ctypes/__init__.py:497(cast)
+18,0.000,0.000,0.000,0.000,{built-in method sys.intern}
+2,0.000,0.000,0.000,0.000,{built-in method posix.close}
+2,0.000,0.000,0.000,0.000,/home/eecs/nathanp/anaconda3/lib/python3.7/codecs.py:309(__init__)
+9,0.000,0.000,0.000,0.000,{method 'join' of 'str' objects}
+32,0.000,0.000,0.000,0.000,{method 'append' of 'list' objects}
+2,0.000,0.000,0.000,0.000,/home/eecs/nathanp/anaconda3/lib/python3.7/site-packages/numpy/core/_asarray.py:88(asanyarray)
+12,0.000,0.000,0.000,0.000,/home/eecs/nathanp/anaconda3/lib/python3.7/pathlib.py:1017(_init)
+12,0.000,0.000,0.000,0.000,{built-in method __new__ of type object at 0x55bbfcb45260}
+12,0.000,0.000,0.000,0.000,{method 'reverse' of 'list' objects}
+1,0.000,0.000,0.000,0.000,/home/eecs/nathanp/anaconda3/lib/python3.7/site-packages/numpy/lib/function_base.py:257(iterable)
+9,0.000,0.000,0.000,0.000,/home/eecs/nathanp/anaconda3/lib/python3.7/pathlib.py:101(join_parsed_parts)
+9,0.000,0.000,0.000,0.000,{built-in method posix.fspath}
+3,0.000,0.000,0.000,0.000,{method 'lstrip' of 'str' objects}
+1,0.000,0.000,0.000,0.000,/home/eecs/nathanp/anaconda3/lib/python3.7/json/encoder.py:259(_make_iterencode)
+1,0.000,0.000,0.000,0.000,{method 'from_buffer' of '_ctypes.PyCArrayType' objects}
+1,0.000,0.000,0.000,0.000,{built-in method builtins.any}
+3,0.000,0.000,0.000,0.000,{method 'startswith' of 'str' objects}
+1,0.000,0.000,0.000,0.000,/home/eecs/nathanp/anaconda3/lib/python3.7/codecs.py:186(__init__)
+4,0.000,0.000,0.000,0.000,{method 'end' of 're.Match' objects}
+1,0.000,0.000,0.000,0.000,{built-in method builtins.iter}
+1,0.000,0.000,0.000,0.000,/home/eecs/nathanp/anaconda3/lib/python3.7/site-packages/numpy/lib/stride_tricks.py:26(_maybe_view_as_subclass)
+2,0.000,0.000,0.000,0.000,/home/eecs/nathanp/anaconda3/lib/python3.7/site-packages/numpy/lib/stride_tricks.py:121(<genexpr>)
+1,0.000,0.000,0.000,0.000,{built-in method numpy.core._multiarray_umath.normalize_axis_index}
+1,0.000,0.000,0.000,0.000,/home/eecs/nathanp/anaconda3/lib/python3.7/site-packages/numpy/core/multiarray.py:145(concatenate)
+2,0.000,0.000,0.000,0.000,{built-in method _json.encode_basestring_ascii}
+2,0.000,0.000,0.000,0.000,/home/eecs/nathanp/anaconda3/lib/python3.7/codecs.py:260(__init__)
+3,0.000,0.000,0.000,0.000,{built-in method builtins.id}
+1,0.000,0.000,0.000,0.000,{built-in method builtins.setattr}
+1,0.000,0.000,0.000,0.000,{method 'items' of 'dict' objects}
+1,0.000,0.000,0.000,0.000,/home/eecs/nathanp/anaconda3/lib/python3.7/site-packages/numpy/lib/stride_tricks.py:139(_broadcast_to_dispatcher)
+1,0.000,0.000,0.000,0.000,/home/eecs/nathanp/anaconda3/lib/python3.7/site-packages/numpy/lib/function_base.py:1143(_diff_dispatcher)
+1,0.000,0.000,0.000,0.000,{method 'disable' of '_lsprof.Profiler' objects}
+
+
