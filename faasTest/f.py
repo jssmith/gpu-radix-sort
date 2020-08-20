@@ -68,7 +68,7 @@ def f(event):
             "err" : "" 
            }
 
-def main():
+def selfTest():
     """Main only used for testing purposes"""
     # nElem = 256 
     nElem = 256*(1024*1024)
@@ -196,6 +196,6 @@ def testGenerate():
 
 
 if __name__ == "__main__":
-    # main()
+    # selfTest()
     directInvoke()
     # testGenerate()

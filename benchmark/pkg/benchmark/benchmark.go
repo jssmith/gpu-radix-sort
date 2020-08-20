@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
 
 	"github.com/nathantp/gpu-radix-sort/benchmark/pkg/data"
 	"github.com/nathantp/gpu-radix-sort/benchmark/pkg/faas"
@@ -58,7 +59,7 @@ func BenchFileLocalDistrib(arr []byte, stats SortStats) error {
 	return nil
 }
 
-func BenchFaas(arr []byte, stats SortStats) error {
+func BenchFaasOne(arr []byte, stats SortStats) error {
 	var ok bool
 
 	var TTotal *PerfTimer
@@ -94,13 +95,37 @@ func BenchFaas(arr []byte, stats SortStats) error {
 	return nil
 }
 
+func BenchFaasAll(origRaw []byte, name string) (SortStats, error) {
+	var err error
+	const nrepeat = 5
+
+	stats := make(SortStats)
+
+	iterIn := make([]byte, len(origRaw))
+
+	// Timed runs
+	for i := 0; i < nrepeat; i++ {
+		copy(iterIn, origRaw)
+		err = BenchFaasOne(iterIn, stats)
+		if err != nil {
+			return stats, errors.Wrap(err, "Failed to benchmark FaaS")
+		}
+
+		cmd := exec.Command("./copyResult.sh", fmt.Sprintf("%s_%d", name, i), "faasStats/")
+		err = cmd.Run()
+		if err != nil {
+			return stats, errors.Wrap(err, "Error while copying profiling results")
+		}
+	}
+	return stats, nil
+}
+
 // This runs manual benchmarks (not managed by Go's benchmarking tool)
 // Even if an error is returned, the returned stats may be non-nil and contain
 // valid results up until the error
 func RunBenchmarks() (map[string]SortStats, error) {
 	var err error
 
-	const nrepeat = 1
 	stats := make(map[string]SortStats)
 
 	// nElem := 1024 * 1024
@@ -110,7 +135,6 @@ func RunBenchmarks() (map[string]SortStats, error) {
 	if err != nil {
 		return stats, errors.Wrap(err, "Failed to generate inputs")
 	}
-	iterIn := make([]byte, len(origRaw))
 
 	// stats["MemLocalDistrib"] = make(SortStats)
 	// for i := 0; i < nrepeat; i++ {
@@ -131,14 +155,26 @@ func RunBenchmarks() (map[string]SortStats, error) {
 	// 	}
 	// }
 
-	stats["FaaS"] = make(SortStats)
-	for i := 0; i < nrepeat; i++ {
-		copy(iterIn, origRaw)
-		err = BenchFaas(iterIn, stats["FaaS"])
-		if err != nil {
-			return stats, errors.Wrap(err, "Failed to benchmark FaaS")
-		}
+	err = os.Mkdir("faasStats", 0o700)
+	if os.IsExist(err) {
+		return stats, fmt.Errorf("Profiling results dir already exists, please cleanup first")
+	} else if err != nil {
+		return stats, errors.Wrapf(err, "Error creating profiling results directory")
 	}
+
+	sort.SetWidth(8)
+	runStats, err := BenchFaasAll(origRaw, "8b")
+	if err != nil {
+		return stats, err
+	}
+	stats["FaaS8"] = runStats
+
+	sort.SetWidth(16)
+	runStats, err = BenchFaasAll(origRaw, "16b")
+	if err != nil {
+		return stats, err
+	}
+	stats["FaaS16"] = runStats
 
 	return stats, nil
 }
